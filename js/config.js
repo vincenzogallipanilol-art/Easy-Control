@@ -1,6 +1,5 @@
 // ================================================================
 // Easy Control — Configurazione Supabase
-// Modifica questi valori con le credenziali del tuo progetto
 // ================================================================
-const SUPABASE_URL      = 'https://YOUR_PROJECT.supabase.co';
-const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
+const SUPABASE_URL      = 'https://bnuajmbzacxymwxzexwl.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable_qg-a1CTmmjn7ulmRe0ba0w_A9L4_pat';
