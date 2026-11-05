@@ -1,0 +1,91 @@
+/* ================================================================
+   Easy Control — custom styles (override Tabler)
+   ================================================================ */
+
+/* ── BRAND ────────────────────────────────────────────────────── */
+:root {
+  --ec-accent: #206bc4;
+}
+
+/* ── SIDEBAR ─────────────────────────────────────────────────── */
+.navbar-brand .navbar-brand-image {
+  height: 28px;
+}
+.sidebar-brand-text {
+  font-weight: 700;
+  letter-spacing: .02em;
+}
+
+/* ── KPI TILES ───────────────────────────────────────────────── */
+.card .avatar {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: .5rem;
+}
+
+/* ── TABLE hover ─────────────────────────────────────────────── */
+.table-vcenter tbody tr:hover {
+  background: rgba(32, 107, 196, .04);
+}
+
+/* ── TOAST ───────────────────────────────────────────────────── */
+.ec-toast {
+  position: fixed;
+  bottom: 1.5rem;
+  right: 1.5rem;
+  z-index: 9999;
+  padding: .6rem 1.2rem;
+  border-radius: .5rem;
+  font-size: .875rem;
+  font-weight: 500;
+  background: #1a2234;
+  color: #e8eeff;
+  box-shadow: 0 4px 20px rgba(0,0,0,.25);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity .25s, transform .25s;
+  max-width: 340px;
+}
+.ec-toast--show { opacity: 1; transform: translateY(0); }
+.ec-toast--success { background: #0ca678; color: #fff; }
+.ec-toast--danger  { background: #d63939; color: #fff; }
+.ec-toast--warning { background: #f59e0b; color: #fff; }
+.ec-toast--info    { background: #206bc4; color: #fff; }
+
+/* ── LOADER overlay ─────────────────────────────────────────── */
+#ec-loader {
+  position: fixed;
+  inset: 0;
+  background: rgba(10, 14, 23, .6);
+  backdrop-filter: blur(3px);
+  z-index: 9998;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.ec-loader__box {
+  background: #fff;
+  border-radius: .75rem;
+  padding: 2rem 2.5rem;
+  text-align: center;
+  box-shadow: 0 8px 40px rgba(0,0,0,.2);
+}
+
+/* ── SECTION transitions ─────────────────────────────────────── */
+[data-section] { animation: fadeIn .18s ease; }
+@keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
+
+/* ── MODE buttons in filter table ───────────────────────────── */
+.font-monospace { font-family: 'Courier New', monospace; }
+
+/* ── Empty state ─────────────────────────────────────────────── */
+.empty-icon svg { width: 48px; height: 48px; color: #a0aec0; }
+
+/* ── Responsive tweaks ───────────────────────────────────────── */
+@media (max-width: 768px) {
+  .table-responsive { font-size: .8rem; }
+  .ec-toast { left: 1rem; right: 1rem; bottom: 1rem; }
+}
