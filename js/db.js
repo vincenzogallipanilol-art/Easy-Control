@@ -3,7 +3,7 @@
 // ================================================================
 const DB = (() => {
 
-  // ── CONFIG ──────────────────────────────────────────────────────
+  // ── CONFIG ────────────────────────────────────────────────────
   async function getConfig() {
     const { data, error } = await db.from('app_config').select('key,value');
     if (error) throw error;
@@ -16,7 +16,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── STATE FILTERS ───────────────────────────────────────────────
+  // ── STATE FILTERS ───────────────────────────────────────────
   async function getStateFilters() {
     const { data, error } = await db.from('state_filters').select('*').order('stato');
     if (error) throw error;
@@ -28,7 +28,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── COLLEAGUES ──────────────────────────────────────────────────
+  // ── COLLEAGUES ────────────────────────────────────────────
   async function getColleagues() {
     const { data, error } = await db.from('colleagues')
       .select('*').order('sort_order');
@@ -44,7 +44,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── REPORTS ─────────────────────────────────────────────────────
+  // ── REPORTS ──────────────────────────────────────────────
   async function getReports() {
     const { data, error } = await db.from('daily_reports')
       .select('*').order('uploaded_at', { ascending: false });
@@ -71,7 +71,7 @@ const DB = (() => {
     return data;
   }
 
-  // ── PRACTICES ───────────────────────────────────────────────────
+  // ── PRACTICES ────────────────────────────────────────────
   async function insertPractices(practices) {
     // Batch insert in chunks of 1000
     const CHUNK = 1000;
@@ -95,7 +95,7 @@ const DB = (() => {
     return all;
   }
 
-  // ── ASSIGNMENTS ─────────────────────────────────────────────────
+  // ── ASSIGNMENTS ───────────────────────────────────────────
   async function getAssignments(reportId) {
     const { data, error } = await db.from('assignments')
       .select('*').eq('report_id', reportId);
@@ -121,7 +121,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── AGENT EXCLUSIONS ────────────────────────────────────────────
+  // ── AGENT EXCLUSIONS ──────────────────────────────────────
   async function getAgentExclusions() {
     const { data, error } = await db.from('agent_exclusions').select('*').order('agent_name');
     if (error) throw error;
@@ -138,7 +138,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── USERS (admin) ───────────────────────────────────────────────
+  // ── USERS (admin) ─────────────────────────────────────────
   async function getUsers() {
     const { data, error } = await db.from('profiles').select('*').order('email');
     if (error) throw error;
@@ -146,6 +146,91 @@ const DB = (() => {
   }
   async function setUserRole(userId, role) {
     const { error } = await db.from('profiles').update({ role }).eq('id', userId);
+    if (error) throw error;
+  }
+  async function setUserColleague(userId, colleagueId) {
+    const { error } = await db.from('profiles').update({ colleague_id: colleagueId || null }).eq('id', userId);
+    if (error) throw error;
+  }
+
+  // ── PRACTICE STATUS / NOTE (chiave = pratica_id, non l'id tecnico) ─
+  async function getPracticeStatuses() {
+    const { data, error } = await db.from('practice_status').select('*');
+    if (error) throw error;
+    return data;
+  }
+  async function getPracticeNotes(praticaId) {
+    const { data, error } = await db.from('practice_notes')
+      .select('*, author:profiles(full_name,email)')
+      .eq('pratica_id', praticaId)
+      .order('created_at', { ascending: true });
+    if (error) throw error;
+    return data;
+  }
+  async function addPracticeNote({ praticaId, body, color, mentions }) {
+    const { data: { user } } = await db.auth.getUser();
+    const { data, error } = await db.from('practice_notes').insert({
+      pratica_id: praticaId,
+      author_id:  user.id,
+      body:       body || '',
+      color:      color || null,
+      mentions:   mentions && mentions.length ? mentions : [],
+    }).select().single();
+    if (error) throw error;
+
+    if (color) {
+      const { error: e2 } = await db.from('practice_status').upsert({
+        pratica_id: praticaId, color, updated_by: user.id, updated_at: new Date().toISOString(),
+      });
+      if (e2) throw e2;
+    }
+
+    if (mentions && mentions.length) {
+      const rows = mentions
+        .filter(uid => uid !== user.id)
+        .map(uid => ({
+          user_id:    uid,
+          type:       'mention',
+          title:      'Sei stato taggato in una nota',
+          body:       (body || '').slice(0, 200),
+          pratica_id: praticaId,
+        }));
+      if (rows.length) {
+        const { error: e3 } = await db.from('notifications').insert(rows);
+        if (e3) throw e3;
+      }
+    }
+    return data;
+  }
+
+  // ── NOTIFICATIONS ───────────────────────────────────────────
+  async function getNotifications() {
+    const { data, error } = await db.from('notifications')
+      .select('*').order('created_at', { ascending: false }).limit(50);
+    if (error) throw error;
+    return data;
+  }
+  async function markNotificationRead(id) {
+    const { error } = await db.from('notifications').update({ read: true }).eq('id', id);
+    if (error) throw error;
+  }
+  async function markAllNotificationsRead(ids) {
+    if (!ids || !ids.length) return;
+    const { error } = await db.from('notifications').update({ read: true }).in('id', ids);
+    if (error) throw error;
+  }
+
+  // ── CHAT (stanza unica) ───────────────────────────────────────
+  async function getChatMessages() {
+    const { data, error } = await db.from('chat_messages')
+      .select('*, author:profiles(full_name,email)')
+      .order('created_at', { ascending: true }).limit(300);
+    if (error) throw error;
+    return data;
+  }
+  async function sendChatMessage(body) {
+    const { data: { user } } = await db.auth.getUser();
+    const { error } = await db.from('chat_messages').insert({ author_id: user.id, body });
     if (error) throw error;
   }
 
@@ -156,7 +241,10 @@ const DB = (() => {
     getReports, getActiveReport, createReport,
     insertPractices, getPractices,
     getAssignments, upsertAssignment, bulkUpsertAssignments, deleteAutoAssignments,
-    getUsers, setUserRole,
+    getUsers, setUserRole, setUserColleague,
     getAgentExclusions, addAgentExclusion, deleteAgentExclusion,
+    getPracticeStatuses, getPracticeNotes, addPracticeNote,
+    getNotifications, markNotificationRead, markAllNotificationsRead,
+    getChatMessages, sendChatMessage,
   };
 })();
