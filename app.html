@@ -51,6 +51,26 @@
             </a>
           </li>
 
+          <!-- Le mie pratiche -->
+          <li class="nav-item">
+            <a class="nav-link" href="#" data-nav="mine">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>
+              </span>
+              <span class="nav-link-title">Le mie pratiche</span>
+            </a>
+          </li>
+
+          <!-- Chat -->
+          <li class="nav-item">
+            <a class="nav-link" href="#" data-nav="chat">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+              </span>
+              <span class="nav-link-title">Chat</span>
+            </a>
+          </li>
+
           <!-- Admin (solo admin) -->
           <li class="nav-item" data-admin-only>
             <a class="nav-link" href="#" data-nav="admin">
@@ -94,6 +114,16 @@
           </div>
           <div class="col-auto ms-auto d-print-none">
             <div class="d-flex gap-2">
+              <!-- Notifiche -->
+              <div class="dropdown">
+                <button class="btn btn-outline-secondary btn-sm position-relative" id="btn-notifications" data-bs-toggle="dropdown">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
+                  <span id="notif-badge" class="badge bg-red" style="display:none;position:absolute;top:-4px;right:-4px;min-width:18px;height:18px;border-radius:9px;font-size:10px;padding:0 4px;line-height:18px">0</span>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end" style="width:340px;max-height:420px;overflow-y:auto" id="notif-dropdown">
+                  <div class="text-center text-muted small py-3">Nessuna notifica</div>
+                </div>
+              </div>
               <!-- Upload report (admin only) -->
               <div data-admin-only>
                 <button class="btn btn-outline-secondary btn-sm" id="btn-upload-report">
@@ -137,6 +167,26 @@
         <!-- Pool -->
         <div data-section="pool" style="display:none">
           <div id="pool-content">
+            <div class="text-center py-5 text-muted">
+              <div class="spinner-border text-primary mb-3" role="status"></div>
+              <p>Caricamento…</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Le mie pratiche -->
+        <div data-section="mine" style="display:none">
+          <div id="mine-content">
+            <div class="text-center py-5 text-muted">
+              <div class="spinner-border text-primary mb-3" role="status"></div>
+              <p>Caricamento…</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Chat -->
+        <div data-section="chat" style="display:none">
+          <div id="chat-content">
             <div class="text-center py-5 text-muted">
               <div class="spinner-border text-primary mb-3" role="status"></div>
               <p>Caricamento…</p>
@@ -233,7 +283,7 @@
             <div class="card-header"><h3 class="card-title">Utenti</h3></div>
             <div class="table-responsive">
               <table class="table table-vcenter card-table">
-                <thead><tr><th>Email</th><th>Nome</th><th>Ruolo</th><th>Modifica</th></tr></thead>
+                <thead><tr><th>Email</th><th>Nome</th><th>Ruolo</th><th>Collega</th></tr></thead>
                 <tbody id="admin-users-tbody">
                   <tr><td colspan="4" class="text-center text-muted py-3">Caricamento…</td></tr>
                 </tbody>
@@ -315,6 +365,42 @@
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Annulla</button>
         <button type="button" class="btn btn-primary" onclick="Admin.saveColleague()">Salva</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL NOTA / STATO PRATICA ──────────────────────────────── -->
+<div class="modal modal-blur fade" id="modal-note" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Pratica <span id="note-pratica-id" class="text-muted"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="note-pratica-id-input"/>
+
+        <!-- Thread note esistenti -->
+        <div id="note-thread" class="mb-3" style="max-height:260px;overflow-y:auto"></div>
+
+        <hr/>
+
+        <!-- Stato -->
+        <label class="form-label">Stato</label>
+        <div id="note-status-picker" class="d-flex flex-wrap gap-2 mb-3"></div>
+
+        <!-- Testo nota -->
+        <label class="form-label">Nota <small id="note-required-hint" class="text-danger" style="display:none">(obbligatoria per questo stato)</small></label>
+        <textarea id="note-body" class="form-control mb-3" rows="3" placeholder="Descrivi il problema…"></textarea>
+
+        <!-- Tag colleghi -->
+        <label class="form-label">Tagga qualcuno <small class="text-muted">(riceverà una notifica)</small></label>
+        <div id="note-mentions-list" class="d-flex flex-wrap gap-3 mb-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Annulla</button>
+        <button type="button" class="btn btn-primary" onclick="App.submitNote()">Invia</button>
       </div>
     </div>
   </div>
