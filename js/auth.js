@@ -11,6 +11,15 @@ const Auth = (() => {
     return _profile;
   }
 
+  async function signUp(email, password, fullName) {
+    const { data, error } = await db.auth.signUp({
+      email, password,
+      options: { data: { full_name: fullName || '' } },
+    });
+    if (error) throw error;
+    return data;
+  }
+
   async function signOut() {
     _profile = null;
     await db.auth.signOut();
@@ -52,5 +61,5 @@ const Auth = (() => {
     if (session) window.location.href = redirectTo;
   }
 
-  return { signIn, signOut, getSession, getProfile, isAdmin, requireAuth, redirectIfLoggedIn };
+  return { signIn, signUp, signOut, getSession, getProfile, isAdmin, requireAuth, redirectIfLoggedIn };
 })();
