@@ -8,9 +8,24 @@
   <link rel="stylesheet" href="css/app.css"/>
 </head>
 <body class="antialiased">
+
+<!-- ── SCHERMATA DI ATTESA APPROVAZIONE ────────────────── -->
+<div id="pending-screen" style="display:none">
+  <div class="page page-center">
+    <div class="container container-tight py-4 text-center">
+      <div class="mb-3">
+        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#f59f00" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+      <h2 class="mb-2">Account in attesa di approvazione</h2>
+      <p class="text-muted mb-4">Il tuo account è stato creato ma deve ancora essere approvato da un amministratore.<br/>Riprova più tardi oppure contatta chi gestisce Easy Control.</p>
+      <button class="btn btn-outline-secondary" id="pending-logout">Esci</button>
+    </div>
+  </div>
+</div>
+
 <div class="wrapper">
 
-  <!-- ── SIDEBAR ─────────────────────────────────────────────── -->
+  <!-- ── SIDEBAR ────────────────────────── -->
   <aside class="navbar navbar-vertical navbar-expand-lg navbar-dark" data-bs-theme="dark">
     <div class="container-fluid">
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-menu">
@@ -99,7 +114,7 @@
     </div>
   </aside>
 
-  <!-- ── MAIN ──────────────────────────────────────────────────── -->
+  <!-- ── MAIN ─────────────────────────── -->
   <div class="page-wrapper">
 
     <!-- Top header -->
@@ -150,7 +165,7 @@
       </div>
     </div>
 
-    <!-- ── SECTIONS ─────────────────────────────────────────── -->
+    <!-- ── SECTIONS ──────────────────── -->
     <div class="page-body">
       <div class="container-xl">
 
@@ -278,14 +293,30 @@
             </div>
           </div>
 
+          <!-- Utenti in attesa di approvazione -->
+          <div class="card mb-4 border-warning" id="admin-pending-users-wrap" style="display:none">
+            <div class="card-header bg-warning-lt">
+              <h3 class="card-title">
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                Utenti in attesa di approvazione
+              </h3>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-vcenter card-table">
+                <thead><tr><th>Email</th><th>Nome</th><th>Collega</th><th></th></tr></thead>
+                <tbody id="admin-pending-users-tbody"></tbody>
+              </table>
+            </div>
+          </div>
+
           <!-- Utenti -->
           <div class="card">
             <div class="card-header"><h3 class="card-title">Utenti</h3></div>
             <div class="table-responsive">
               <table class="table table-vcenter card-table">
-                <thead><tr><th>Email</th><th>Nome</th><th>Ruolo</th><th>Collega</th></tr></thead>
+                <thead><tr><th>Email</th><th>Nome</th><th>Ruolo</th><th>Collega</th><th></th></tr></thead>
                 <tbody id="admin-users-tbody">
-                  <tr><td colspan="4" class="text-center text-muted py-3">Caricamento…</td></tr>
+                  <tr><td colspan="5" class="text-center text-muted py-3">Caricamento…</td></tr>
                 </tbody>
               </table>
             </div>
@@ -310,7 +341,7 @@
   </div><!-- /page-wrapper -->
 </div><!-- /wrapper -->
 
-<!-- ── MODAL COLLEGA ─────────────────────────────────────────── -->
+<!-- ── MODAL COLLEGA ─────────────────────── -->
 <div class="modal modal-blur fade" id="modal-colleague" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
@@ -370,7 +401,7 @@
   </div>
 </div>
 
-<!-- ── MODAL NOTA / STATO PRATICA ──────────────────────────────── -->
+<!-- ── MODAL NOTA / STATO PRATICA ────────────────── -->
 <div class="modal modal-blur fade" id="modal-note" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
@@ -406,7 +437,7 @@
   </div>
 </div>
 
-<!-- ── SCRIPTS ───────────────────────────────────────────────── -->
+<!-- ── SCRIPTS ─────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
