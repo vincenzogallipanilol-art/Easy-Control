@@ -9,6 +9,7 @@
 
   const profile = Auth.getProfile();
   const isAdmin = Auth.isAdmin();
+  const myColleagueId = profile.colleague_id || null;
 
   // 2. Mostra/nascondi elementi admin
   document.querySelectorAll('[data-admin-only]').forEach(el => {
@@ -16,6 +17,29 @@
   });
   document.getElementById('user-name-display').textContent = profile.full_name || profile.email;
   document.getElementById('user-role-badge').innerHTML = UI.renderRoleBadge(profile.role);
+
+  // 2b. Stato applicativo (dichiarato qui perché navigate(), più sotto,
+  //     referenzia queste variabili fin dalla prima chiamata)
+  let activeReport     = null;
+  let practices        = [];
+  let assignments      = {};  // practice_id → assignment
+  let colleagues       = [];
+  let stateFilters     = [];
+  let config           = {};
+  let agentExclusions  = [];
+
+  let users             = [];
+  let practiceStatuses  = {};  // pratica_id → { color, updated_by, updated_at }
+  let notifications     = [];
+  let chatMessages       = [];
+  let _notePraticaId    = null;
+  let _noteSelectedColor = null; // null = nessuna modifica di stato
+  let _poolSearchTerm   = '';
+  let _poolShowAll      = false;
+
+  function escapeHtml(s) {
+    return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
 
   // 3. Navigazione SPA
   const navLinks = document.querySelectorAll('[data-nav]');
@@ -27,6 +51,8 @@
     history.replaceState(null, '', '#' + target);
 
     if (target === 'admin' && isAdmin) Admin.init();
+    if (target === 'mine') renderMine();
+    if (target === 'chat') { renderChat(); scrollChatToBottom(); }
   }
 
   navLinks.forEach(l => l.addEventListener('click', e => {
@@ -45,14 +71,6 @@
   });
 
   // 5. Carica report attivo
-  let activeReport     = null;
-  let practices        = [];
-  let assignments      = {};  // practice_id → assignment
-  let colleagues       = [];
-  let stateFilters     = [];
-  let config           = {};
-  let agentExclusions  = [];
-
   async function loadActiveReport() {
     UI.showLoader('Caricamento report…');
     try {
@@ -83,6 +101,59 @@
     } finally {
       UI.hideLoader();
     }
+  }
+
+  // 5b. Carica dati globali (indipendenti dal report attivo)
+  async function loadGlobalData() {
+    try {
+      const [usersData, statusesData, notifData, chatData] = await Promise.all([
+        DB.getUsers(),
+        DB.getPracticeStatuses(),
+        DB.getNotifications(),
+        DB.getChatMessages(),
+      ]);
+      users = usersData;
+      practiceStatuses = {};
+      for (const s of statusesData) practiceStatuses[s.pratica_id] = s;
+      notifications = notifData;
+      chatMessages = chatData;
+
+      renderNotifBell();
+      renderPool();
+      renderMine();
+      renderChat();
+    } catch(e) {
+      UI.toast('Errore caricamento dati: ' + e.message, 'danger');
+    }
+  }
+
+  // 5c. Realtime globale (chat, note, stato pratica, notifiche)
+  function subscribeGlobalRealtime() {
+    Realtime.subscribeGlobal(session.user.id, {
+      onChatMessage(payload) {
+        DB.getChatMessages().then(d => { chatMessages = d; renderChat(); scrollChatToBottom(); });
+      },
+      onPracticeStatusChange(payload) {
+        const { eventType, new: row, old } = payload;
+        if (eventType === 'DELETE') {
+          delete practiceStatuses[old.pratica_id];
+        } else {
+          practiceStatuses[row.pratica_id] = row;
+        }
+        renderPool();
+        renderMine();
+      },
+      onPracticeNote(payload) {
+        if (_notePraticaId && payload.new?.pratica_id === _notePraticaId) {
+          renderNoteThread();
+        }
+      },
+      onNotification(payload) {
+        notifications.unshift(payload.new);
+        renderNotifBell();
+        UI.toast(payload.new.title || 'Nuova notifica', 'info');
+      },
+    });
   }
 
   // 6. Real-time handlers
@@ -257,6 +328,12 @@
       </div>`;
   }
 
+  const REASON_LABELS = {
+    tipologia_no_match: 'Nessun collega per questa tipologia',
+    quota_full:         'Quota piena',
+    other:              'Altro',
+  };
+
   function renderPool() {
     const el = document.getElementById('pool-content');
     if (!el || !activeReport) return;
@@ -269,12 +346,24 @@
     const excludedPool = unassigned.filter(p => excludedSet.size > 0 && excludedSet.has((p.agente_attuale || '').toLowerCase().trim()));
     const regularPool  = unassigned.filter(p => !excludedSet.has((p.agente_attuale || '').toLowerCase().trim()));
 
+    // Motivo (riusa il calcolo dell'engine, già esistente, mai mostrato finora)
+    const { poolPractices } = Engine.distribute(
+      practices, colleagues, stateFilters, config.working_days || 1,
+      Object.values(assignments).filter(a => a.is_manual), agentExclusions
+    );
+    const reasonMap = {};
+    for (const p of poolPractices) reasonMap[p.id] = p._reason;
+
+    const searchKey = p => [p.pratica_id, p.cognome, p.nome, p.tipologia, p.agente_attuale].join(' ').toLowerCase();
+
     const poolRow = (p, showAssign) => `
-      <tr>
+      <tr class="pool-row" data-search="${escapeHtml(searchKey(p))}">
+        <td style="cursor:pointer" onclick="App.openNoteModal('${p.pratica_id}')">${UI.statusDot(practiceStatuses[p.pratica_id]?.color)}</td>
         <td class="font-monospace small">${p.pratica_id || '—'}</td>
         <td>${p.cognome} ${p.nome}</td>
         <td class="text-muted small">${p.tipologia || '—'}</td>
         <td>${UI.statoBadge(p.stato_attuale)}</td>
+        <td class="text-muted small">${REASON_LABELS[reasonMap[p.id]] || '—'}</td>
         ${showAssign ? `<td>
           <select class="form-select form-select-sm" style="width:auto"
             onchange="AppRuntime.assignFromPool('${p.id}', this.value)">
@@ -292,19 +381,31 @@
       return;
     }
 
+    const PAGE = 200;
+    const regularShown = _poolShowAll ? regularPool : regularPool.slice(0, PAGE);
+
     el.innerHTML = `
       ${regularPool.length ? `
       <div class="card mb-4">
         <div class="card-header">
           <h3 class="card-title">Pool — ${regularPool.length} pratiche non assegnate</h3>
+          <div class="card-options">
+            <input type="text" id="pool-search" class="form-control form-control-sm" style="width:240px"
+              placeholder="Cerca pratica, nome, tipologia…" value="${escapeHtml(_poolSearchTerm)}"
+              oninput="App.filterPool(this.value)"/>
+          </div>
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Assegna a</th></tr></thead>
-            <tbody>${regularPool.slice(0, 200).map(p => poolRow(p, true)).join('')}</tbody>
+            <thead><tr><th></th><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Motivo</th><th>Assegna a</th></tr></thead>
+            <tbody>${regularShown.map(p => poolRow(p, true)).join('')}</tbody>
           </table>
         </div>
-        ${regularPool.length > 200 ? `<div class="card-footer text-muted text-center small">Mostrate 200 su ${regularPool.length}</div>` : ''}
+        ${!_poolShowAll && regularPool.length > PAGE ? `
+          <div class="card-footer text-center">
+            <span class="text-muted small me-2">Mostrate ${PAGE} su ${regularPool.length}</span>
+            <button class="btn btn-sm btn-outline-secondary" onclick="App.showAllPool()">Mostra tutte</button>
+          </div>` : ''}
       </div>` : ''}
 
       ${excludedPool.length ? `
@@ -320,17 +421,20 @@
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Agente attuale</th></tr></thead>
+            <thead><tr><th></th><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Motivo</th><th>Agente attuale</th></tr></thead>
             <tbody>${excludedPool.slice(0, 200).map(p => poolRow(p, false)).join('')}</tbody>
           </table>
         </div>
         ${excludedPool.length > 200 ? `<div class="card-footer text-muted text-center small">Mostrate 200 su ${excludedPool.length}</div>` : ''}
       </div>` : ''}`;
+
+    if (_poolSearchTerm) filterPool(_poolSearchTerm);
   }
 
   function renderDistribution() {
     renderDashboard();
     renderPool();
+    renderMine();
   }
 
   // 10. Pool manual assignment
@@ -400,7 +504,271 @@
   function iconCal()   { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`; }
   function iconExcl()  { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`; }
 
+  // ── LE MIE PRATICHE ─────────────────────────────────────────────
+  function renderMine() {
+    const el = document.getElementById('mine-content');
+    if (!el) return;
+
+    if (!myColleagueId) {
+      el.innerHTML = UI.emptyState(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>',
+        'Il tuo account non è collegato a nessun collega. Contatta un admin per il collegamento.'
+      );
+      return;
+    }
+    if (!activeReport) {
+      el.innerHTML = UI.emptyState(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/></svg>',
+        'Nessun report attivo.'
+      );
+      return;
+    }
+
+    const myAssignments = Object.values(assignments).filter(a => a.colleague_id === myColleagueId);
+    const myPracticeIds = new Set(myAssignments.map(a => a.practice_id));
+    const myPractices   = practices.filter(p => myPracticeIds.has(p.id));
+
+    if (!myPractices.length) {
+      el.innerHTML = UI.emptyState(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>',
+        'Nessuna pratica assegnata a te al momento'
+      );
+      return;
+    }
+
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Le mie pratiche — ${myPractices.length}</h3>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-sm table-vcenter card-table">
+            <thead><tr><th>Stato</th><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato Attuale</th><th></th></tr></thead>
+            <tbody>
+              ${myPractices.map(p => `
+                <tr>
+                  <td style="cursor:pointer" onclick="App.openNoteModal('${p.pratica_id}')">${UI.statusDot(practiceStatuses[p.pratica_id]?.color)}</td>
+                  <td class="font-monospace small">${p.pratica_id || '—'}</td>
+                  <td>${p.cognome} ${p.nome}</td>
+                  <td class="text-muted small">${p.tipologia || '—'}</td>
+                  <td>${UI.statoBadge(p.stato_attuale)}</td>
+                  <td><button class="btn btn-sm btn-outline-secondary" onclick="App.openNoteModal('${p.pratica_id}')">Nota</button></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  // ── CHAT (stanza unica) ───────────────────────────────────────────
+  function renderChat() {
+    const el = document.getElementById('chat-content');
+    if (!el) return;
+
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-header"><h3 class="card-title">Chat di gruppo</h3></div>
+        <div id="chat-messages" style="height:420px;overflow-y:auto;padding:1rem" class="d-flex flex-column gap-2">
+          ${chatMessages.length ? chatMessages.map(m => `
+            <div class="d-flex align-items-start gap-2">
+              <span class="avatar avatar-xs bg-blue-lt">${UI.initialsAvatar(m.author?.full_name || m.author?.email)}</span>
+              <div>
+                <div class="small"><strong>${escapeHtml(m.author?.full_name || m.author?.email || '—')}</strong>
+                  <span class="text-muted ms-1">${UI.timeAgo(m.created_at)}</span>
+                </div>
+                <div>${escapeHtml(m.body)}</div>
+              </div>
+            </div>`).join('') : '<div class="text-muted text-center py-4">Nessun messaggio ancora. Scrivi il primo!</div>'}
+        </div>
+        <div class="card-footer">
+          <div class="input-group">
+            <input type="text" id="chat-input" class="form-control" placeholder="Scrivi un messaggio…"/>
+            <button class="btn btn-primary" onclick="App.sendChat()">Invia</button>
+          </div>
+        </div>
+      </div>`;
+
+    document.getElementById('chat-input')?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); sendChat(); }
+    });
+  }
+
+  function scrollChatToBottom() {
+    const box = document.getElementById('chat-messages');
+    if (box) box.scrollTop = box.scrollHeight;
+  }
+
+  async function sendChat() {
+    const input = document.getElementById('chat-input');
+    const body = input?.value.trim();
+    if (!body) return;
+    input.value = '';
+    try {
+      await DB.sendChatMessage(body);
+      // Il real-time aggiornerà la UI; fallback immediato per UX reattiva
+      chatMessages = await DB.getChatMessages();
+      renderChat();
+      scrollChatToBottom();
+    } catch(e) {
+      UI.toast('Errore invio messaggio: ' + e.message, 'danger');
+    }
+  }
+
+  // ── NOTIFICHE ──────────────────────────────────────────────────
+  function renderNotifBell() {
+    const badge = document.getElementById('notif-badge');
+    const dropdown = document.getElementById('notif-dropdown');
+    if (!badge || !dropdown) return;
+
+    const unread = notifications.filter(n => !n.read);
+    if (unread.length) {
+      badge.style.display = '';
+      badge.textContent = unread.length > 9 ? '9+' : unread.length;
+    } else {
+      badge.style.display = 'none';
+    }
+
+    if (!notifications.length) {
+      dropdown.innerHTML = '<div class="text-center text-muted small py-3">Nessuna notifica</div>';
+      return;
+    }
+
+    dropdown.innerHTML = notifications.slice(0, 20).map(n => `
+      <a href="#" class="dropdown-item ${n.read ? '' : 'bg-blue-lt'}" onclick="App.openNotification('${n.id}', '${n.pratica_id || ''}');return false;">
+        <div class="small fw-medium">${escapeHtml(n.title)}</div>
+        ${n.body ? `<div class="small text-muted">${escapeHtml(n.body)}</div>` : ''}
+        <div class="text-muted" style="font-size:11px">${UI.timeAgo(n.created_at)}</div>
+      </a>`).join('');
+  }
+
+  async function openNotification(id, praticaId) {
+    try {
+      await DB.markNotificationRead(id);
+      const n = notifications.find(x => x.id === id);
+      if (n) n.read = true;
+      renderNotifBell();
+    } catch(e) { /* non bloccante */ }
+    if (praticaId) openNoteModal(praticaId);
+  }
+
+  // ── MODAL NOTA / STATO PRATICA ─────────────────────────────────────
+  function openNoteModal(praticaId) {
+    _notePraticaId = praticaId;
+    _noteSelectedColor = (practiceStatuses[praticaId] && practiceStatuses[praticaId].color) || null;
+
+    document.getElementById('note-pratica-id').textContent = praticaId;
+    document.getElementById('note-body').value = '';
+    renderNoteStatusPicker();
+    renderNoteMentions();
+    renderNoteThread();
+
+    const modal = document.getElementById('modal-note');
+    bootstrap.Modal.getOrCreateInstance(modal).show();
+  }
+
+  function selectNoteColor(color) {
+    _noteSelectedColor = color;
+    renderNoteStatusPicker();
+  }
+
+  function renderNoteStatusPicker() {
+    const el = document.getElementById('note-status-picker');
+    if (!el) return;
+    const colors = Object.keys(UI.STATUS_COLORS);
+    el.innerHTML = `
+      <button type="button" class="btn btn-sm ${_noteSelectedColor === null ? 'btn-secondary' : 'btn-outline-secondary'}"
+        onclick="App.selectNoteColor(null)">Nessuna modifica</button>
+      ${colors.map(c => {
+        const s = UI.STATUS_COLORS[c];
+        const active = _noteSelectedColor === c;
+        return `<button type="button" class="btn btn-sm"
+          style="background:${active ? s.hex : 'transparent'};border:2px solid ${s.hex};color:${active ? '#fff' : s.hex}"
+          onclick="App.selectNoteColor('${c}')">${s.label}</button>`;
+      }).join('')}`;
+
+    const hint = document.getElementById('note-required-hint');
+    if (hint) hint.style.display = (_noteSelectedColor && _noteSelectedColor !== 'verde') ? '' : 'none';
+  }
+
+  function renderNoteMentions() {
+    const el = document.getElementById('note-mentions-list');
+    if (!el) return;
+    const others = users.filter(u => u.id !== session.user.id);
+    el.innerHTML = others.length ? others.map(u => `
+      <label class="form-check">
+        <input type="checkbox" class="form-check-input note-mention-cb" value="${u.id}"/>
+        <span class="form-check-label">${escapeHtml(u.full_name || u.email)}</span>
+      </label>`).join('') : '<span class="text-muted small">Nessun altro utente</span>';
+  }
+
+  async function renderNoteThread() {
+    const el = document.getElementById('note-thread');
+    if (!el) return;
+    const praticaId = _notePraticaId;
+    el.innerHTML = '<div class="text-center text-muted small py-2">Caricamento…</div>';
+    try {
+      const notes = await DB.getPracticeNotes(praticaId);
+      if (praticaId !== _notePraticaId) return; // modal cambiata nel frattempo
+      if (!notes.length) { el.innerHTML = '<div class="text-muted small">Nessuna nota ancora per questa pratica.</div>'; return; }
+      el.innerHTML = notes.map(n => `
+        <div class="mb-2 pb-2 border-bottom">
+          <div class="d-flex align-items-center gap-2 mb-1">
+            <span class="avatar avatar-xs bg-blue-lt">${UI.initialsAvatar(n.author?.full_name || n.author?.email)}</span>
+            <strong class="small">${escapeHtml(n.author?.full_name || n.author?.email || '—')}</strong>
+            ${n.color ? UI.statusBadge(n.color) : ''}
+            <span class="text-muted small ms-auto">${UI.timeAgo(n.created_at)}</span>
+          </div>
+          ${n.body ? `<div class="small">${escapeHtml(n.body)}</div>` : ''}
+        </div>`).join('');
+    } catch(e) {
+      el.innerHTML = `<div class="text-danger small">Errore: ${e.message}</div>`;
+    }
+  }
+
+  async function submitNote() {
+    const body = document.getElementById('note-body').value.trim();
+    const color = _noteSelectedColor;
+    if (color && color !== 'verde' && !body) {
+      UI.toast('La nota è obbligatoria per questo stato', 'danger');
+      return;
+    }
+    const mentions = Array.from(document.querySelectorAll('.note-mention-cb:checked')).map(cb => cb.value);
+    try {
+      await DB.addPracticeNote({ praticaId: _notePraticaId, body, color, mentions });
+      UI.toast('Nota salvata', 'success');
+      if (color) practiceStatuses[_notePraticaId] = { pratica_id: _notePraticaId, color };
+      bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-note')).hide();
+      renderPool();
+      renderMine();
+    } catch(e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  // ── Pool: ricerca client-side (senza perdere il focus dell'input) ──
+  function filterPool(term) {
+    _poolSearchTerm = (term || '').toLowerCase().trim();
+    document.querySelectorAll('.pool-row').forEach(row => {
+      const hay = row.dataset.search || '';
+      row.style.display = hay.includes(_poolSearchTerm) ? '' : 'none';
+    });
+  }
+
+  function showAllPool() {
+    _poolShowAll = true;
+    renderPool();
+  }
+
+  // Esporta funzioni per onclick inline
+  Object.assign(window.AppRuntime, {
+    openNoteModal, selectNoteColor, submitNote, sendChat,
+    openNotification, filterPool, showAllPool,
+  });
+  window.App = window.AppRuntime;
+
   // Start
   await loadActiveReport();
+  await loadGlobalData();
+  subscribeGlobalRealtime();
 
 })();
