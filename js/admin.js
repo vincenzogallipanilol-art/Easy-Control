@@ -8,7 +8,7 @@ const Admin = (() => {
   let _users           = [];
   let _agentExclusions = [];
 
-  // ── INIT ─────────────────────────────────────────────────────────
+  // ── INIT ──────────────────────────────────────────────────────────
   async function init() {
     [_colleagues, _stateFilters, _users, _agentExclusions] = await Promise.all([
       DB.getColleagues(),
@@ -18,12 +18,13 @@ const Admin = (() => {
     ]);
     renderColleagues();
     renderStateFilters();
+    renderPendingUsers();
     renderUsers();
     renderAgentExclusions();
     await renderWorkingDays();
   }
 
-  // ── COLLEGHI ─────────────────────────────────────────────────────
+  // ── COLLEGHI ─────────────────────────────────────────────────
   function renderColleagues() {
     const tbody = document.getElementById('admin-colleagues-tbody');
     if (!tbody) return;
@@ -114,7 +115,7 @@ const Admin = (() => {
     }
   }
 
-  // ── STATE FILTERS ─────────────────────────────────────────────────
+  // ── STATE FILTERS ───────────────────────────────────────────────
   const MODE_LABELS = { any: '—', empty: '○', filled: '●' };
   const MODE_NEXT   = { any: 'empty', empty: 'filled', filled: 'any' };
 
@@ -154,7 +155,7 @@ const Admin = (() => {
     renderStateFilters();
   }
 
-  // ── WORKING DAYS ─────────────────────────────────────────────────
+  // ── WORKING DAYS ───────────────────────────────────────────────
   async function renderWorkingDays() {
     const cfg = await DB.getConfig();
     const el = document.getElementById('admin-working-days');
@@ -168,11 +169,66 @@ const Admin = (() => {
     UI.toast('Giorni lavorativi salvati', 'success');
   }
 
-  // ── USERS ─────────────────────────────────────────────────────────
+  // ── UTENTI IN ATTESA (nuove registrazioni da approvare) ───
+  function renderPendingUsers() {
+    const wrap = document.getElementById('admin-pending-users-wrap');
+    const tbody = document.getElementById('admin-pending-users-tbody');
+    if (!wrap || !tbody) return;
+
+    const pending = _users.filter(u => u.status === 'pending');
+    wrap.style.display = pending.length ? '' : 'none';
+    if (!pending.length) return;
+
+    tbody.innerHTML = pending.map(u => `
+      <tr data-pending-id="${u.id}">
+        <td>${u.email}</td>
+        <td>${u.full_name || '—'}</td>
+        <td>
+          <select class="form-select form-select-sm" style="width:auto" id="pending-col-${u.id}">
+            <option value="">— nessuno —</option>
+            ${_colleagues.map(c => `<option value="${c.id}">${c.name}</option>`).join('')}
+          </select>
+        </td>
+        <td class="text-nowrap">
+          <button class="btn btn-sm btn-success" onclick="Admin.approveUser('${u.id}')">Approva</button>
+          <button class="btn btn-sm btn-ghost-danger" onclick="Admin.rejectUser('${u.id}')">Rifiuta</button>
+        </td>
+      </tr>`).join('');
+  }
+
+  async function approveUser(userId) {
+    const sel = document.getElementById(`pending-col-${userId}`);
+    const colleagueId = sel?.value || null;
+    try {
+      await DB.approveUser(userId, colleagueId);
+      _users = await DB.getUsers();
+      renderPendingUsers();
+      renderUsers();
+      UI.toast('Utente approvato', 'success');
+    } catch(e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  async function rejectUser(userId) {
+    if (!UI.confirm("Riportare l'utente in attesa? Non potrà usare l'app finché non viene approvato di nuovo.")) return;
+    try {
+      await DB.rejectUser(userId);
+      _users = await DB.getUsers();
+      renderPendingUsers();
+      renderUsers();
+      UI.toast('Utente rimesso in attesa', 'success');
+    } catch(e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  // ── USERS ─────────────────────────────────────────────────
   function renderUsers() {
     const tbody = document.getElementById('admin-users-tbody');
     if (!tbody) return;
-    tbody.innerHTML = _users.map(u => `
+    const approved = _users.filter(u => u.status !== 'pending');
+    tbody.innerHTML = approved.map(u => `
       <tr>
         <td>${u.email}</td>
         <td>${u.full_name || '—'}</td>
@@ -190,6 +246,11 @@ const Admin = (() => {
             <option value="">— nessuno —</option>
             ${_colleagues.map(c => `<option value="${c.id}" ${u.colleague_id === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
           </select>
+        </td>
+        <td>
+          <button class="btn btn-sm btn-ghost-secondary" title="Rimetti in attesa" onclick="Admin.rejectUser('${u.id}')">
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </button>
         </td>
       </tr>`).join('');
   }
@@ -216,7 +277,7 @@ const Admin = (() => {
     }
   }
 
-  // ── AGENTI ESCLUSI ───────────────────────────────────────────────
+  // ── AGENTI ESCLUSI ─────────────────────────────────────
   function renderAgentExclusions() {
     const container = document.getElementById('admin-agent-exclusions-list');
     if (!container) return;
@@ -262,7 +323,7 @@ const Admin = (() => {
     openColleagueModal, saveColleague, deleteColleague,
     toggleFilterIncluded, cycleFilterMode,
     saveWorkingDays, renderWorkingDays,
-    setUserRole, setUserColleague,
+    setUserRole, setUserColleague, approveUser, rejectUser,
     addAgentExclusion, removeAgentExclusion,
   };
 })();

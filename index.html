@@ -38,40 +38,87 @@
 
     <div class="card auth-card mx-auto shadow-sm">
       <div class="card-body p-4">
-        <h3 class="card-title text-center mb-4">Accedi al tuo account</h3>
 
-        <div id="login-error" class="alert alert-danger" role="alert"></div>
+        <!-- ── LOGIN ───────────────────────────── -->
+        <div id="login-view">
+          <h3 class="card-title text-center mb-4">Accedi al tuo account</h3>
 
-        <form id="login-form" novalidate>
-          <div class="mb-3">
-            <label class="form-label" for="email">Email</label>
-            <input type="email" id="email" name="email" class="form-control"
-              placeholder="tuaemail@esempio.it" autocomplete="email" required/>
-          </div>
-          <div class="mb-3">
-            <label class="form-label" for="password">
-              Password
-            </label>
-            <div class="input-group input-group-flat">
-              <input type="password" id="password" name="password" class="form-control"
-                placeholder="La tua password" autocomplete="current-password" required/>
-              <span class="input-group-text">
-                <button type="button" class="btn btn-ghost-secondary btn-sm p-0 border-0"
-                  id="toggle-pw" title="Mostra/nascondi password" style="line-height:1">
-                  <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </button>
-              </span>
+          <div id="login-error" class="alert alert-danger" role="alert" style="display:none"></div>
+
+          <form id="login-form" novalidate>
+            <div class="mb-3">
+              <label class="form-label" for="email">Email</label>
+              <input type="email" id="email" name="email" class="form-control"
+                placeholder="tuaemail@esempio.it" autocomplete="email" required/>
             </div>
+            <div class="mb-3">
+              <label class="form-label" for="password">
+                Password
+              </label>
+              <div class="input-group input-group-flat">
+                <input type="password" id="password" name="password" class="form-control"
+                  placeholder="La tua password" autocomplete="current-password" required/>
+                <span class="input-group-text">
+                  <button type="button" class="btn btn-ghost-secondary btn-sm p-0 border-0"
+                    id="toggle-pw" title="Mostra/nascondi password" style="line-height:1">
+                    <svg id="eye-icon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+                    </svg>
+                  </button>
+                </span>
+              </div>
+            </div>
+            <div class="mt-4">
+              <button type="submit" class="btn btn-primary w-100" id="btn-login">
+                <span id="btn-login-text">Accedi</span>
+                <span id="btn-login-spinner" class="spinner-border spinner-border-sm ms-2" style="display:none"></span>
+              </button>
+            </div>
+          </form>
+
+          <div class="text-center text-muted mt-3 small">
+            Non hai un account? <a href="#" id="show-signup">Registrati</a>
           </div>
-          <div class="mt-4">
-            <button type="submit" class="btn btn-primary w-100" id="btn-login">
-              <span id="btn-login-text">Accedi</span>
-              <span id="btn-login-spinner" class="spinner-border spinner-border-sm ms-2" style="display:none"></span>
-            </button>
+        </div>
+
+        <!-- ── REGISTRAZIONE ────────────────────── -->
+        <div id="signup-view" style="display:none">
+          <h3 class="card-title text-center mb-4">Crea un account</h3>
+
+          <div id="signup-error" class="alert alert-danger" role="alert" style="display:none"></div>
+          <div id="signup-success" class="alert alert-success" role="alert" style="display:none">
+            Registrazione completata. Un amministratore deve approvare il tuo account prima che tu possa accedere.
           </div>
-        </form>
+
+          <form id="signup-form" novalidate>
+            <div class="mb-3">
+              <label class="form-label" for="signup-name">Nome e cognome</label>
+              <input type="text" id="signup-name" name="signup-name" class="form-control"
+                placeholder="Mario Rossi" autocomplete="name" required/>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="signup-email">Email</label>
+              <input type="email" id="signup-email" name="signup-email" class="form-control"
+                placeholder="tuaemail@esempio.it" autocomplete="email" required/>
+            </div>
+            <div class="mb-3">
+              <label class="form-label" for="signup-password">Password</label>
+              <input type="password" id="signup-password" name="signup-password" class="form-control"
+                placeholder="Almeno 6 caratteri" autocomplete="new-password" minlength="6" required/>
+            </div>
+            <div class="mt-4">
+              <button type="submit" class="btn btn-primary w-100" id="btn-signup">
+                <span id="btn-signup-text">Registrati</span>
+                <span id="btn-signup-spinner" class="spinner-border spinner-border-sm ms-2" style="display:none"></span>
+              </button>
+            </div>
+          </form>
+
+          <div class="text-center text-muted mt-3 small">
+            Hai già un account? <a href="#" id="show-login">Accedi</a>
+          </div>
+        </div>
+
       </div>
     </div>
 
@@ -120,6 +167,53 @@
       btnText.textContent = 'Accedi';
       spinner.style.display = 'none';
       document.getElementById('btn-login').disabled = false;
+    }
+  });
+
+  // Toggle login / registrazione
+  document.getElementById('show-signup').addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('login-view').style.display = 'none';
+    document.getElementById('signup-view').style.display = '';
+  });
+  document.getElementById('show-login').addEventListener('click', function(e) {
+    e.preventDefault();
+    document.getElementById('signup-view').style.display = 'none';
+    document.getElementById('login-view').style.display = '';
+  });
+
+  // Signup form
+  document.getElementById('signup-form').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    const fullName = document.getElementById('signup-name').value.trim();
+    const email    = document.getElementById('signup-email').value.trim();
+    const password = document.getElementById('signup-password').value;
+    const errEl     = document.getElementById('signup-error');
+    const successEl = document.getElementById('signup-success');
+    const btnText   = document.getElementById('btn-signup-text');
+    const spinner   = document.getElementById('btn-signup-spinner');
+
+    errEl.style.display = 'none';
+    successEl.style.display = 'none';
+    btnText.textContent = 'Registrazione…';
+    spinner.style.display = '';
+    document.getElementById('btn-signup').disabled = true;
+
+    try {
+      await Auth.signUp(email, password, fullName);
+      document.getElementById('signup-form').reset();
+      successEl.style.display = '';
+      btnText.textContent = 'Registrati';
+      spinner.style.display = 'none';
+      document.getElementById('btn-signup').disabled = false;
+    } catch(err) {
+      errEl.textContent = err.message === 'User already registered'
+        ? 'Esiste già un account con questa email.'
+        : err.message;
+      errEl.style.display = '';
+      btnText.textContent = 'Registrati';
+      spinner.style.display = 'none';
+      document.getElementById('btn-signup').disabled = false;
     }
   });
 </script>
