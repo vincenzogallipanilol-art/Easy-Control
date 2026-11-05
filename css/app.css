@@ -89,3 +89,36 @@
   .table-responsive { font-size: .8rem; }
   .ec-toast { left: 1rem; right: 1rem; bottom: 1rem; }
 }
+
+/* ── STATUS DOT (stato pratica) ───────────────────────────────── */
+.status-dot {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 2px rgba(0,0,0,.05) inset;
+}
+.status-dot-empty {
+  background: #dde3ea;
+  border: 1px dashed #b4bdc9;
+  width: 10px;
+  height: 10px;
+}
+
+/* ── CHAT ─────────────────────────────────────────────────────── */
+#chat-messages { background: #f6f8fb; border-radius: .5rem; }
+#chat-messages .avatar-xs {
+  width: 24px; height: 24px; font-size: 10px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+}
+
+/* ── NOTIFICHE ────────────────────────────────────────────────── */
+#notif-badge { font-weight: 700; }
+#notif-dropdown .dropdown-item { white-space: normal; border-bottom: 1px solid #eef1f5; }
+#notif-dropdown .dropdown-item:last-child { border-bottom: none; }
+
+/* ── MODAL NOTA ───────────────────────────────────────────────── */
+#note-thread .avatar-xs {
+  width: 22px; height: 22px; font-size: 10px; font-weight: 600;
+  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+}

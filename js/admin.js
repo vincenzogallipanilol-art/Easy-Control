@@ -184,6 +184,13 @@ const Admin = (() => {
             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
           </select>
         </td>
+        <td>
+          <select class="form-select form-select-sm" style="width:auto"
+            onchange="Admin.setUserColleague('${u.id}', this.value)">
+            <option value="">— nessuno —</option>
+            ${_colleagues.map(c => `<option value="${c.id}" ${u.colleague_id === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}
+          </select>
+        </td>
       </tr>`).join('');
   }
 
@@ -193,6 +200,17 @@ const Admin = (() => {
       _users = await DB.getUsers();
       renderUsers();
       UI.toast('Ruolo aggiornato', 'success');
+    } catch(e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  async function setUserColleague(userId, colleagueId) {
+    try {
+      await DB.setUserColleague(userId, colleagueId);
+      _users = await DB.getUsers();
+      renderUsers();
+      UI.toast('Collega aggiornato', 'success');
     } catch(e) {
       UI.toast('Errore: ' + e.message, 'danger');
     }
@@ -244,7 +262,7 @@ const Admin = (() => {
     openColleagueModal, saveColleague, deleteColleague,
     toggleFilterIncluded, cycleFilterMode,
     saveWorkingDays, renderWorkingDays,
-    setUserRole,
+    setUserRole, setUserColleague,
     addAgentExclusion, removeAgentExclusion,
   };
 })();

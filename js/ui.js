@@ -107,10 +107,53 @@ const UI = (() => {
     return window.confirm(msg);
   }
 
+  // ── STATO PRATICA (verde/giallo/arancione/rosso/viola/azzurro) ────
+  const STATUS_COLORS = {
+    verde:     { label: 'Conforme',               hex: '#2fb344' },
+    giallo:    { label: 'Richiesta integrazioni',  hex: '#f59f00' },
+    arancione: { label: 'Da chiamare',             hex: '#f76707' },
+    rosso:     { label: 'Audit',                   hex: '#d63939' },
+    viola:     { label: 'Xflat',                   hex: '#ae3ec9' },
+    azzurro:   { label: 'Help',                    hex: '#0ca8c7' },
+  };
+  function statusDot(color) {
+    if (!color || !STATUS_COLORS[color]) {
+      return `<span class="status-dot status-dot-empty" title="Nessuno stato"></span>`;
+    }
+    const s = STATUS_COLORS[color];
+    return `<span class="status-dot" style="background:${s.hex}" title="${s.label}"></span>`;
+  }
+  function statusBadge(color) {
+    if (!color || !STATUS_COLORS[color]) return `<span class="text-muted small">—</span>`;
+    const s = STATUS_COLORS[color];
+    return `<span class="badge" style="background:${s.hex};color:#fff">${s.label}</span>`;
+  }
+
+  // ── AVATAR INIZIALI (per chat/note) ───────────────────────────────
+  function initialsAvatar(name) {
+    const n = (name || '?').trim();
+    const initials = n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
+    return initials;
+  }
+
+  function timeAgo(iso) {
+    const d = new Date(iso);
+    const diffMs = Date.now() - d.getTime();
+    const mins = Math.floor(diffMs / 60000);
+    if (mins < 1) return 'ora';
+    if (mins < 60) return `${mins}m fa`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}h fa`;
+    const days = Math.floor(hours / 24);
+    if (days < 7) return `${days}g fa`;
+    return d.toLocaleDateString('it-IT');
+  }
+
   return {
     toast, showLoader, hideLoader,
     renderRoleBadge, colleagueColor, colleagueBadge,
     kpiTile, statoBadge, progressBar, emptyState, confirm,
+    STATUS_COLORS, statusDot, statusBadge, initialsAvatar, timeAgo,
     COLORS,
   };
 })();

@@ -3,6 +3,7 @@
 // ================================================================
 const Realtime = (() => {
   let _channels = [];
+  let _globalChannels = [];
 
   function subscribe(reportId, callbacks = {}) {
     unsubscribe(); // pulizia precedente
@@ -54,5 +55,33 @@ const Realtime = (() => {
     _channels = [];
   }
 
-  return { subscribe, unsubscribe };
+  // Canale "di sessione": chat, note, stato pratica, notifiche.
+  // Indipendente dal report attivo — attivo per tutta la durata del login.
+  function subscribeGlobal(userId, callbacks = {}) {
+    unsubscribeGlobal();
+
+    const sessionCh = db.channel('session-' + userId)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' },
+        payload => callbacks.onChatMessage && callbacks.onChatMessage(payload))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'practice_status' },
+        payload => callbacks.onPracticeStatusChange && callbacks.onPracticeStatusChange(payload))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'practice_notes' },
+        payload => callbacks.onPracticeNote && callbacks.onPracticeNote(payload))
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
+        payload => {
+          if (payload.new.user_id === userId && callbacks.onNotification) callbacks.onNotification(payload);
+        })
+      .subscribe();
+
+    _globalChannels = [sessionCh];
+  }
+
+  function unsubscribeGlobal() {
+    for (const ch of _globalChannels) {
+      db.removeChannel(ch);
+    }
+    _globalChannels = [];
+  }
+
+  return { subscribe, unsubscribe, subscribeGlobal, unsubscribeGlobal };
 })();
