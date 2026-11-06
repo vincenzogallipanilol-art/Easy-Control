@@ -1,39 +1,49 @@
 // ================================================================
-// Admin panel — colleghi, filtri stato, config, upload, utenti
+// Admin panel — colleghi, filtri stato per collega, Agenti Sally,
+// config, upload, utenti
 // ================================================================
 const Admin = (() => {
 
   let _colleagues      = [];
-  let _stateFilters    = [];
   let _users           = [];
   let _agentExclusions = [];
+  let _config          = {};
+  let _canonicalStates = [];   // lista nomi stato (da state_filters, solo come elenco)
+  let _tipologieList   = [];   // distinct tipologie dalle pratiche
 
-  // ── INIT ──────────────────────────────────────────────────────────
+  // Stato del modal collega aperto al momento
+  let _modalColleagueId = null;
+  let _modalPrimary     = new Set();
+  let _modalSecondary   = new Set();
+  let _modalFilters     = {}; // stato -> { included, note_mode, conf_mode }
+
+  // ── INIT ──────────────────────────────── */
   async function init() {
-    [_colleagues, _stateFilters, _users, _agentExclusions] = await Promise.all([
+    [_colleagues, _users, _agentExclusions, _config, _canonicalStates] = await Promise.all([
       DB.getColleagues(),
-      DB.getStateFilters(),
       DB.getUsers(),
       DB.getAgentExclusions(),
+      DB.getConfig(),
+      DB.getStateFilters().then(rows => rows.map(r => r.stato)),
     ]);
     renderColleagues();
-    renderStateFilters();
     renderPendingUsers();
     renderUsers();
     renderAgentExclusions();
+    renderSallyHook();
     await renderWorkingDays();
   }
 
-  // ── COLLEGHI ─────────────────────────────────────────────────
+  // ── COLLEGHI ─────────────────────────────── */
   function renderColleagues() {
     const tbody = document.getElementById('admin-colleagues-tbody');
     if (!tbody) return;
     if (!_colleagues.length) {
-      tbody.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-3">Nessun collega</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="5" class="text-center text-muted py-3">Nessun collega</td></tr>`;
       return;
     }
     tbody.innerHTML = _colleagues.map(c => `
-      <tr data-id="${c.id}">
+      <tr data-id="${c.id}" class="ec-row-clickable" onclick="Admin.openColleagueModal('${c.id}')">
         <td>
           <div class="d-flex align-items-center gap-2">
             <span class="avatar avatar-sm bg-${UI.colleagueColor(c.color_idx)}-lt">${c.name[0]}</span>
@@ -44,21 +54,17 @@ const Admin = (() => {
         <td>${c.min_quota} – ${c.max_quota}</td>
         <td class="text-muted small">${(c.primary_tipologie || []).join(', ') || '—'}</td>
         <td class="text-muted small">${(c.secondary_tipologie || []).join(', ') || '—'}</td>
-        <td>
-          <button class="btn btn-sm btn-ghost-secondary" onclick="Admin.openColleagueModal('${c.id}')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-          </button>
-          <button class="btn btn-sm btn-ghost-danger" onclick="Admin.deleteColleague('${c.id}')">
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/></svg>
-          </button>
-        </td>
       </tr>`).join('');
   }
 
-  function openColleagueModal(id) {
+  async function openColleagueModal(id) {
     const c = id ? _colleagues.find(x => x.id === id) : null;
     const modal = document.getElementById('modal-colleague');
     if (!modal) return;
+
+    _modalColleagueId = id || null;
+    _modalPrimary   = new Set(c?.primary_tipologie || []);
+    _modalSecondary = new Set(c?.secondary_tipologie || []);
 
     modal.querySelector('[name=col-id]').value       = c?.id || '';
     modal.querySelector('[name=col-name]').value     = c?.name || '';
@@ -66,12 +72,101 @@ const Admin = (() => {
     modal.querySelector('[name=col-min]').value      = c?.min_quota ?? 30;
     modal.querySelector('[name=col-max]').value      = c?.max_quota ?? 60;
     modal.querySelector('[name=col-color]').value    = c?.color_idx ?? 0;
-    modal.querySelector('[name=col-primary]').value  = (c?.primary_tipologie || []).join('\n');
-    modal.querySelector('[name=col-secondary]').value= (c?.secondary_tipologie || []).join('\n');
     modal.querySelector('[name=col-sort]').value     = c?.sort_order ?? _colleagues.length;
+
+    document.getElementById('modal-colleague-title').textContent = c ? `Collega — ${c.name}` : 'Nuovo collega';
+    document.getElementById('btn-delete-colleague').style.display = c ? '' : 'none';
+
+    // Carica (se serve) la lista distinct tipologie
+    if (!_tipologieList.length) {
+      try { _tipologieList = await DB.getDistinctTipologie(); } catch(e) { /* non bloccante */ }
+    }
+    // Includi eventuali tipologie già assegnate ma non più presenti nelle pratiche correnti
+    const extra = new Set([..._modalPrimary, ..._modalSecondary]);
+    const fullList = Array.from(new Set([..._tipologieList, ...extra])).sort((a,b) => a.localeCompare(b,'it'));
+    renderModalTipologie(fullList);
+
+    // Filtri stato di questo collega (default: tutti inclusi, modalità 'empty')
+    _modalFilters = {};
+    for (const stato of _canonicalStates) {
+      _modalFilters[stato] = { stato, included: true, note_mode: 'empty', conf_mode: 'empty' };
+    }
+    if (id) {
+      try {
+        const rows = await DB.getColleagueStateFilters(id);
+        for (const r of rows) _modalFilters[r.stato] = { stato: r.stato, included: r.included, note_mode: r.note_mode, conf_mode: r.conf_mode };
+      } catch(e) { /* non bloccante */ }
+    }
+    renderModalFilters();
 
     const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
     bsModal.show();
+  }
+
+  function renderModalTipologie(list) {
+    const primEl = document.getElementById('col-primary-list');
+    const secEl  = document.getElementById('col-secondary-list');
+    if (!primEl || !secEl) return;
+    if (!list.length) {
+      const msg = '<span class="text-muted small">Nessuna tipologia trovata nelle pratiche caricate finora.</span>';
+      primEl.innerHTML = msg; secEl.innerHTML = msg;
+      return;
+    }
+    const row = (t, set, which) => `
+      <label class="form-check">
+        <input type="checkbox" class="form-check-input" ${set.has(t) ? 'checked' : ''}
+          onchange="Admin.toggleModalTipologia('${which}', '${t.replace(/'/g,"\\'")}', this.checked)">
+        <span class="form-check-label small">${t}</span>
+      </label>`;
+    primEl.innerHTML = list.map(t => row(t, _modalPrimary, 'primary')).join('');
+    secEl.innerHTML  = list.map(t => row(t, _modalSecondary, 'secondary')).join('');
+  }
+
+  function toggleModalTipologia(which, tipologia, checked) {
+    const set = which === 'primary' ? _modalPrimary : _modalSecondary;
+    if (checked) set.add(tipologia); else set.delete(tipologia);
+  }
+
+  const MODE_LABELS = { any: '—', empty: '○', filled: '●' };
+  const MODE_NEXT   = { any: 'empty', empty: 'filled', filled: 'any' };
+
+  function renderModalFilters() {
+    const tbody = document.getElementById('col-filters-tbody');
+    if (!tbody) return;
+    if (!_canonicalStates.length) {
+      tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted small py-2">Nessuno stato configurato</td></tr>`;
+      return;
+    }
+    tbody.innerHTML = _canonicalStates.map(stato => {
+      const f = _modalFilters[stato] || { included: true, note_mode: 'empty', conf_mode: 'empty' };
+      return `
+      <tr>
+        <td class="small">${stato}</td>
+        <td>
+          <input type="checkbox" class="form-check-input" ${f.included ? 'checked' : ''}
+            onchange="Admin.toggleModalFilterIncluded('${stato.replace(/'/g,"\\'")}', this.checked)">
+        </td>
+        <td>
+          <button type="button" class="btn btn-sm btn-ghost-secondary font-monospace" style="min-width:2rem"
+            onclick="Admin.cycleModalFilterMode('${stato.replace(/'/g,"\\'")}','note_mode')" title="Note">${MODE_LABELS[f.note_mode]}</button>
+        </td>
+        <td>
+          <button type="button" class="btn btn-sm btn-ghost-secondary font-monospace" style="min-width:2rem"
+            onclick="Admin.cycleModalFilterMode('${stato.replace(/'/g,"\\'")}','conf_mode')" title="Conformità">${MODE_LABELS[f.conf_mode]}</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  function toggleModalFilterIncluded(stato, checked) {
+    if (!_modalFilters[stato]) _modalFilters[stato] = { stato, included: true, note_mode: 'empty', conf_mode: 'empty' };
+    _modalFilters[stato].included = checked;
+  }
+
+  function cycleModalFilterMode(stato, field) {
+    if (!_modalFilters[stato]) _modalFilters[stato] = { stato, included: true, note_mode: 'empty', conf_mode: 'empty' };
+    _modalFilters[stato][field] = MODE_NEXT[_modalFilters[stato][field]];
+    renderModalFilters();
   }
 
   async function saveColleague() {
@@ -80,20 +175,27 @@ const Admin = (() => {
     const name = modal.querySelector('[name=col-name]').value.trim();
     if (!name) { UI.toast('Nome obbligatorio', 'danger'); return; }
 
+    const colleagueId = id || 'c' + Date.now();
     const col = {
-      id:                  id || 'c' + Date.now(),
+      id:                  colleagueId,
       name,
       active:              modal.querySelector('[name=col-active]').checked,
       min_quota:           parseInt(modal.querySelector('[name=col-min]').value) || 0,
       max_quota:           parseInt(modal.querySelector('[name=col-max]').value) || 60,
       color_idx:           parseInt(modal.querySelector('[name=col-color]').value) || 0,
-      primary_tipologie:   modal.querySelector('[name=col-primary]').value.split('\n').map(s => s.trim()).filter(Boolean),
-      secondary_tipologie: modal.querySelector('[name=col-secondary]').value.split('\n').map(s => s.trim()).filter(Boolean),
+      primary_tipologie:   Array.from(_modalPrimary),
+      secondary_tipologie: Array.from(_modalSecondary),
       sort_order:          parseInt(modal.querySelector('[name=col-sort]').value) || 0,
     };
 
     try {
       await DB.upsertColleague(col);
+      const filterRows = _canonicalStates.map(stato => {
+        const f = _modalFilters[stato] || { included: true, note_mode: 'empty', conf_mode: 'empty' };
+        return { stato, included: f.included, note_mode: f.note_mode, conf_mode: f.conf_mode };
+      });
+      if (filterRows.length) await DB.saveColleagueStateFilters(colleagueId, filterRows);
+
       bootstrap.Modal.getOrCreateInstance(modal).hide();
       _colleagues = await DB.getColleagues();
       renderColleagues();
@@ -104,9 +206,13 @@ const Admin = (() => {
   }
 
   async function deleteColleague(id) {
+    id = id || _modalColleagueId;
+    if (!id) return;
     if (!UI.confirm('Eliminare questo collega?')) return;
     try {
       await DB.deleteColleague(id);
+      const modal = document.getElementById('modal-colleague');
+      if (modal) bootstrap.Modal.getOrCreateInstance(modal).hide();
       _colleagues = await DB.getColleagues();
       renderColleagues();
       UI.toast('Collega eliminato', 'success');
@@ -115,51 +221,10 @@ const Admin = (() => {
     }
   }
 
-  // ── STATE FILTERS ───────────────────────────────────────────────
-  const MODE_LABELS = { any: '—', empty: '○', filled: '●' };
-  const MODE_NEXT   = { any: 'empty', empty: 'filled', filled: 'any' };
-
-  function renderStateFilters() {
-    const tbody = document.getElementById('admin-filters-tbody');
-    if (!tbody) return;
-    tbody.innerHTML = _stateFilters.map(f => `
-      <tr>
-        <td>${f.stato}</td>
-        <td>
-          <input type="checkbox" class="form-check-input" ${f.included ? 'checked' : ''}
-            onchange="Admin.toggleFilterIncluded('${f.stato}', this.checked)">
-        </td>
-        <td>
-          <button class="btn btn-sm btn-ghost-secondary font-monospace" style="min-width:2rem"
-            onclick="Admin.cycleFilterMode('${f.stato}','note_mode')" title="Note">${MODE_LABELS[f.note_mode]}</button>
-        </td>
-        <td>
-          <button class="btn btn-sm btn-ghost-secondary font-monospace" style="min-width:2rem"
-            onclick="Admin.cycleFilterMode('${f.stato}','conf_mode')" title="Conformità">${MODE_LABELS[f.conf_mode]}</button>
-        </td>
-      </tr>`).join('');
-  }
-
-  async function toggleFilterIncluded(stato, included) {
-    const f = _stateFilters.find(x => x.stato === stato);
-    if (!f) return;
-    f.included = included;
-    await DB.upsertStateFilter(f);
-  }
-
-  async function cycleFilterMode(stato, field) {
-    const f = _stateFilters.find(x => x.stato === stato);
-    if (!f) return;
-    f[field] = MODE_NEXT[f[field]];
-    await DB.upsertStateFilter(f);
-    renderStateFilters();
-  }
-
-  // ── WORKING DAYS ───────────────────────────────────────────────
+  // ── WORKING DAYS ──────────────────────────── */
   async function renderWorkingDays() {
-    const cfg = await DB.getConfig();
     const el = document.getElementById('admin-working-days');
-    if (el) el.value = cfg.working_days ?? 1;
+    if (el) el.value = _config.working_days ?? 1;
   }
 
   async function saveWorkingDays() {
@@ -169,7 +234,27 @@ const Admin = (() => {
     UI.toast('Giorni lavorativi salvati', 'success');
   }
 
-  // ── UTENTI IN ATTESA (nuove registrazioni da approvare) ───
+  // ── AGENTI SALLY (pool agganciabile a un collega) ─────────── */
+  function renderSallyHook() {
+    const sel = document.getElementById('admin-sally-hook');
+    if (!sel) return;
+    const hooked = _config.sally_hook_colleague_id || '';
+    sel.innerHTML = `
+      <option value="">— nessun aggancio (pool separata) —</option>
+      ${_colleagues.map(c => `<option value="${c.id}" ${hooked === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}`;
+  }
+
+  async function setSallyHook(colleagueId) {
+    try {
+      await DB.setConfig('sally_hook_colleague_id', colleagueId || null);
+      _config.sally_hook_colleague_id = colleagueId || null;
+      UI.toast(colleagueId ? 'Pool Agenti Sally agganciata' : 'Aggancio rimosso — pool separata', 'success');
+    } catch(e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  // ── UTENTI IN ATTESA (nuove registrazioni da approvare) ─────── */
   function renderPendingUsers() {
     const wrap = document.getElementById('admin-pending-users-wrap');
     const tbody = document.getElementById('admin-pending-users-tbody');
@@ -223,7 +308,7 @@ const Admin = (() => {
     }
   }
 
-  // ── USERS ─────────────────────────────────────────────────
+  // ── USERS ────────────────────────────────── */
   function renderUsers() {
     const tbody = document.getElementById('admin-users-tbody');
     if (!tbody) return;
@@ -237,6 +322,7 @@ const Admin = (() => {
           <select class="form-select form-select-sm" style="width:auto"
             onchange="Admin.setUserRole('${u.id}', this.value)">
             <option value="user"  ${u.role === 'user'  ? 'selected' : ''}>User</option>
+            <option value="top"   ${u.role === 'top'   ? 'selected' : ''}>Top</option>
             <option value="admin" ${u.role === 'admin' ? 'selected' : ''}>Admin</option>
           </select>
         </td>
@@ -277,12 +363,12 @@ const Admin = (() => {
     }
   }
 
-  // ── AGENTI ESCLUSI ─────────────────────────────────────
+  // ── AGENTI SALLY (lista nomi agente) ────────────────── */
   function renderAgentExclusions() {
     const container = document.getElementById('admin-agent-exclusions-list');
     if (!container) return;
     if (!_agentExclusions.length) {
-      container.innerHTML = '<span class="text-muted small">Nessun agente escluso</span>';
+      container.innerHTML = '<span class="text-muted small">Nessun agente in lista</span>';
       return;
     }
     container.innerHTML = _agentExclusions.map(ae => `
@@ -301,7 +387,7 @@ const Admin = (() => {
       inp.value = '';
       _agentExclusions = await DB.getAgentExclusions();
       renderAgentExclusions();
-      UI.toast(`Agente "${name}" escluso`, 'success');
+      UI.toast(`Agente "${name}" aggiunto`, 'success');
     } catch(e) {
       UI.toast('Errore: ' + e.message, 'danger');
     }
@@ -312,7 +398,7 @@ const Admin = (() => {
       await DB.deleteAgentExclusion(id);
       _agentExclusions = await DB.getAgentExclusions();
       renderAgentExclusions();
-      UI.toast('Agente rimosso dalle esclusioni', 'success');
+      UI.toast('Agente rimosso dalla lista', 'success');
     } catch(e) {
       UI.toast('Errore: ' + e.message, 'danger');
     }
@@ -321,8 +407,9 @@ const Admin = (() => {
   return {
     init,
     openColleagueModal, saveColleague, deleteColleague,
-    toggleFilterIncluded, cycleFilterMode,
+    toggleModalTipologia, toggleModalFilterIncluded, cycleModalFilterMode,
     saveWorkingDays, renderWorkingDays,
+    setSallyHook,
     setUserRole, setUserColleague, approveUser, rejectUser,
     addAgentExclusion, removeAgentExclusion,
   };
