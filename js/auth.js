@@ -34,6 +34,8 @@ const Auth = (() => {
 
   function getProfile() { return _profile; }
   function isAdmin()    { return _profile?.role === 'admin'; }
+  function isTop()      { return _profile?.role === 'top'; }
+  function canSeeAll()  { return _profile?.role === 'admin' || _profile?.role === 'top'; }
 
   async function _fetchProfile(userId) {
     const { data, error } = await db
@@ -61,5 +63,5 @@ const Auth = (() => {
     if (session) window.location.href = redirectTo;
   }
 
-  return { signIn, signUp, signOut, getSession, getProfile, isAdmin, requireAuth, redirectIfLoggedIn };
+  return { signIn, signUp, signOut, getSession, getProfile, isAdmin, isTop, canSeeAll, requireAuth, redirectIfLoggedIn };
 })();

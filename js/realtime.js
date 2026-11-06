@@ -43,6 +43,8 @@ const Realtime = (() => {
         payload => callbacks.onConfigChange && callbacks.onConfigChange(payload))
       .on('postgres_changes', { event: '*', schema: 'public', table: 'agent_exclusions' },
         payload => callbacks.onAgentExclusionsChange && callbacks.onAgentExclusionsChange(payload))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'colleague_state_filters' },
+        payload => callbacks.onColleagueFiltersChange && callbacks.onColleagueFiltersChange(payload))
       .subscribe();
 
     _channels = [assignCh, reportCh, configCh];

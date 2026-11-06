@@ -3,7 +3,7 @@
 // ================================================================
 const UI = (() => {
 
-  // ── TOAST ────────────────────────────────────────────────────────
+  // ── TOAST ──────────────────────────────── */
   function toast(msg, type = 'info') {
     const el = document.createElement('div');
     el.className = `ec-toast ec-toast--${type}`;
@@ -16,7 +16,7 @@ const UI = (() => {
     }, 3500);
   }
 
-  // ── LOADER overlay ───────────────────────────────────────────────
+  // ── LOADER overlay ────────────────────────── */
   function showLoader(msg = 'Caricamento…') {
     let el = document.getElementById('ec-loader');
     if (!el) {
@@ -34,14 +34,14 @@ const UI = (() => {
     if (el) el.style.display = 'none';
   }
 
-  // ── BADGE ROLE ───────────────────────────────────────────────────
+  // ── BADGE ROLE ───────────────────────────── */
   function renderRoleBadge(role) {
-    return role === 'admin'
-      ? '<span class="badge bg-blue-lt">Admin</span>'
-      : '<span class="badge bg-secondary-lt">User</span>';
+    if (role === 'admin') return '<span class="badge bg-blue-lt">Admin</span>';
+    if (role === 'top')   return '<span class="badge bg-purple-lt">Top</span>';
+    return '<span class="badge bg-secondary-lt">User</span>';
   }
 
-  // ── COLLEAGUE COLORS ─────────────────────────────────────────────
+  // ── COLLEAGUE COLORS ──────────────────────── */
   const COLORS = ['blue','green','orange','purple','red','cyan','teal','yellow','pink','indigo'];
   function colleagueColor(colorIdx) {
     return COLORS[colorIdx % COLORS.length] || 'blue';
@@ -51,7 +51,7 @@ const UI = (() => {
     return `<span class="badge bg-${c}-lt text-${c}">${name}</span>`;
   }
 
-  // ── KPI TILE ─────────────────────────────────────────────────────
+  // ── KPI TILE ───────────────────────────── */
   function kpiTile(label, value, icon, color = 'blue') {
     return `
       <div class="col-sm-6 col-xl-3">
@@ -71,7 +71,7 @@ const UI = (() => {
       </div>`;
   }
 
-  // ── STATO BADGE ──────────────────────────────────────────────────
+  // ── STATO BADGE ─────────────────────────── */
   function statoBadge(stato) {
     const map = {
       'Stipulata-6': 'bg-green-lt text-green',
@@ -84,7 +84,7 @@ const UI = (() => {
     return `<span class="badge ${cls}">${stato || '—'}</span>`;
   }
 
-  // ── PROGRESS BAR ─────────────────────────────────────────────────
+  // ── PROGRESS BAR ───────────────────────── */
   function progressBar(value, min, max, color = 'blue') {
     const total = max || 1;
     const pct = Math.min(100, Math.round((value / total) * 100));
@@ -94,7 +94,7 @@ const UI = (() => {
     </div>`;
   }
 
-  // ── EMPTY STATE ──────────────────────────────────────────────────
+  // ── EMPTY STATE ────────────────────────── */
   function emptyState(icon, msg) {
     return `<div class="empty py-4">
       <div class="empty-icon">${icon}</div>
@@ -102,12 +102,12 @@ const UI = (() => {
     </div>`;
   }
 
-  // ── CONFIRM DIALOG ───────────────────────────────────────────────
+  // ── CONFIRM DIALOG ─────────────────────── */
   function confirm(msg) {
     return window.confirm(msg);
   }
 
-  // ── STATO PRATICA (verde/giallo/arancione/rosso/viola/azzurro) ────
+  // ── STATO PRATICA (verde/giallo/arancione/rosso/viola/azzurro) ──── */
   const STATUS_COLORS = {
     verde:     { label: 'Conforme',               hex: '#2fb344' },
     giallo:    { label: 'Richiesta integrazioni',  hex: '#f59f00' },
@@ -129,7 +129,7 @@ const UI = (() => {
     return `<span class="badge" style="background:${s.hex};color:#fff">${s.label}</span>`;
   }
 
-  // ── AVATAR INIZIALI (per chat/note) ───────────────────────────────
+  // ── AVATAR INIZIALI (per chat/note) ────────────────── */
   function initialsAvatar(name) {
     const n = (name || '?').trim();
     const initials = n.split(/\s+/).map(w => w[0]).slice(0, 2).join('').toUpperCase() || '?';
