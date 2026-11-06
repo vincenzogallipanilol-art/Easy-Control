@@ -2,12 +2,12 @@
    Easy Control — custom styles (override Tabler)
    ================================================================ */
 
-/* ── BRAND ─────────────────────────────────── */
+/* ── BRAND ────────────────────────────────────────────────────── */
 :root {
   --ec-accent: #206bc4;
 }
 
-/* ── SIDEBAR ─────────────────────────────────── */
+/* ── SIDEBAR ─────────────────────────────────────────────────── */
 .navbar-brand .navbar-brand-image {
   height: 28px;
 }
@@ -16,17 +16,21 @@
   letter-spacing: .02em;
 }
 
-/* Sidebar solo icone, si espande al passaggio del mouse (solo desktop) */
+/* Sidebar solo icone, si espande al passaggio del mouse (solo desktop).
+   Tabler definisce .navbar-vertical.navbar-expand-lg{width:15rem} con
+   specificità (0,2,0): bisogna battere quella regola, quindi qui si usa
+   !important su tutte le proprietà in conflitto. */
 @media (min-width: 992px) {
   .ec-sidebar {
-    width: 72px;
-    min-width: 72px;
-    transition: width .18s ease;
-    overflow: hidden;
+    width: 72px !important;
+    min-width: 72px !important;
+    transition: width .18s ease !important;
+    overflow: hidden !important;
     z-index: 1030;
   }
   .ec-sidebar:hover {
-    width: 240px;
+    width: 240px !important;
+    overflow-y: auto !important;
   }
   .ec-sidebar .ec-sidebar-label {
     opacity: 0;
@@ -50,19 +54,14 @@
     padding-left: .5rem;
     overflow: hidden;
   }
-  /* Lo spazio occupato dalla sidebar fissa resta 72px anche quando si espande in overlay */
-  .ec-sidebar.navbar-vertical {
-    position: fixed;
-    top: 0;
-    left: 0;
-    height: 100vh;
-  }
+  /* Tabler imposta margin-left:15rem su .page-wrapper tramite un selettore
+     con combinatore ~ (specificità 0,3,0): !important per batterlo */
   .page-wrapper {
-    margin-left: 72px;
+    margin-left: 72px !important;
   }
 }
 
-/* ── KPI TILES ──────────────────────────────── */
+/* ── KPI TILES ───────────────────────────────────────────────── */
 .card .avatar {
   width: 40px;
   height: 40px;
@@ -72,12 +71,12 @@
   border-radius: .5rem;
 }
 
-/* ── TABLE hover ──────────────────────────── */
+/* ── TABLE hover ─────────────────────────────────────────────── */
 .table-vcenter tbody tr:hover {
   background: rgba(32, 107, 196, .04);
 }
 
-/* ── TOAST ─────────────────────────────────── */
+/* ── TOAST ───────────────────────────────────────────────────── */
 .ec-toast {
   position: fixed;
   bottom: 1.5rem;
@@ -101,7 +100,7 @@
 .ec-toast--warning { background: #f59e0b; color: #fff; }
 .ec-toast--info    { background: #206bc4; color: #fff; }
 
-/* ── LOADER overlay ────────────────────────── */
+/* ── LOADER overlay ─────────────────────────────────────────── */
 #ec-loader {
   position: fixed;
   inset: 0;
@@ -120,23 +119,23 @@
   box-shadow: 0 8px 40px rgba(0,0,0,.2);
 }
 
-/* ── SECTION transitions ───────────────────────── */
+/* ── SECTION transitions ─────────────────────────────────────── */
 [data-section] { animation: fadeIn .18s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
 
-/* ── MODE buttons in filter table ─────────────────── */
+/* ── MODE buttons in filter table ───────────────────────────── */
 .font-monospace { font-family: 'Courier New', monospace; }
 
-/* ── Empty state ───────────────────────────── */
+/* ── Empty state ─────────────────────────────────────────────── */
 .empty-icon svg { width: 48px; height: 48px; color: #a0aec0; }
 
-/* ── Responsive tweaks ───────────────────────── */
+/* ── Responsive tweaks ───────────────────────────────────────── */
 @media (max-width: 768px) {
   .table-responsive { font-size: .8rem; }
   .ec-toast { left: 1rem; right: 1rem; bottom: 1rem; }
 }
 
-/* ── STATUS DOT (stato pratica) ───────────────────── */
+/* ── STATUS DOT (stato pratica) ───────────────────────────────── */
 .status-dot {
   display: inline-block;
   width: 12px;
@@ -206,16 +205,26 @@
   margin-top: .15rem;
 }
 
-/* ── NOTIFICHE ──────────────────────────────── */
+/* ── NOTIFICHE ────────────────────────────────────────────────── */
 #notif-badge { font-weight: 700; }
 #notif-dropdown .dropdown-item { white-space: normal; border-bottom: 1px solid #eef1f5; }
 #notif-dropdown .dropdown-item:last-child { border-bottom: none; }
 
-/* ── RIGHE CLICCABILI (configurazione colleghi) ─────────── */
+/* ── RIGHE CLICCABILI (configurazione colleghi) ─────────────────── */
 .ec-row-clickable { cursor: pointer; }
 .ec-row-clickable:hover { background: rgba(32, 107, 196, .06); }
 
-/* ── CHECKLIST TIPOLOGIE (modal collega) ─────────────── */
+/* ── BOX NUMERI PER UTENTE (dashboard admin/top) ─────────────────── */
+.ec-user-box {
+  cursor: pointer;
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+.ec-user-box:hover {
+  box-shadow: 0 4px 14px rgba(0,0,0,.08);
+  transform: translateY(-1px);
+}
+
+/* ── CHECKLIST TIPOLOGIE (modal collega) ─────────────────────────── */
 .ec-checklist {
   max-height: 220px;
   overflow-y: auto;
@@ -226,7 +235,7 @@
 }
 .ec-checklist .form-check { margin-bottom: .25rem; }
 
-/* ── MODAL NOTA ──────────────────────────────── */
+/* ── MODAL NOTA ───────────────────────────────────────────────── */
 #note-thread .avatar-xs {
   width: 22px; height: 22px; font-size: 10px; font-weight: 600;
   display: flex; align-items: center; justify-content: center; border-radius: 50%;
