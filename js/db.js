@@ -3,7 +3,7 @@
 // ================================================================
 const DB = (() => {
 
-  // ── CONFIG ───────────────────────────── */
+  // ── CONFIG ──────────────────────────────────────────── */
   async function getConfig() {
     const { data, error } = await db.from('app_config').select('key,value');
     if (error) throw error;
@@ -16,7 +16,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── STATE FILTERS ─────────────────────── */
+  // ── STATE FILTERS ──────────────────────────────────── */
   async function getStateFilters() {
     const { data, error } = await db.from('state_filters').select('*').order('stato');
     if (error) throw error;
@@ -28,7 +28,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── COLLEAGUES ───────────────────────── */
+  // ── COLLEAGUES ────────────────────────────────────── */
   async function getColleagues() {
     const { data, error } = await db.from('colleagues')
       .select('*').order('sort_order');
@@ -44,7 +44,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── REPORTS ────────────────────────── */
+  // ── REPORTS ──────────────────────────────────────── */
   async function getReports() {
     const { data, error } = await db.from('daily_reports')
       .select('*').order('uploaded_at', { ascending: false });
@@ -71,7 +71,7 @@ const DB = (() => {
     return data;
   }
 
-  // ── PRACTICES ────────────────────────── */
+  // ── PRACTICES ────────────────────────────────────── */
   async function insertPractices(practices) {
     // Batch insert in chunks of 1000
     const CHUNK = 1000;
@@ -95,7 +95,7 @@ const DB = (() => {
     return all;
   }
 
-  // ── ASSIGNMENTS ───────────────────────── */
+  // ── ASSIGNMENTS ───────────────────────────────────── */
   async function getAssignments(reportId) {
     const { data, error } = await db.from('assignments')
       .select('*').eq('report_id', reportId);
@@ -121,7 +121,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── AGENT EXCLUSIONS ────────────────────── */
+  // ── AGENT EXCLUSIONS ──────────────────────────────── */
   async function getAgentExclusions() {
     const { data, error } = await db.from('agent_exclusions').select('*').order('agent_name');
     if (error) throw error;
@@ -150,7 +150,7 @@ const DB = (() => {
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'it'));
   }
 
-  // ── FILTRI STATO PER COLLEGA ────────────────────── */
+  // ── FILTRI STATO PER COLLEGA ─────────────────────────── */
   async function getAllColleagueStateFilters() {
     const { data, error } = await db.from('colleague_state_filters').select('*');
     if (error) throw error;
@@ -169,17 +169,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── NUMERI (storico controlli per utente) ───────────── */
-  async function getNoteStatsRaw() {
-    const { data, error } = await db.from('practice_notes')
-      .select('author_id, created_at')
-      .order('created_at', { ascending: false })
-      .limit(20000);
-    if (error) throw error;
-    return data;
-  }
-
-  // ── USERS (admin) ───────────────────────── */
+  // ── USERS (admin) ────────────────────────────────── */
   async function getUsers() {
     const { data, error } = await db.from('profiles').select('*').order('email');
     if (error) throw error;
@@ -255,7 +245,7 @@ const DB = (() => {
     return data;
   }
 
-  // ── NOTIFICATIONS ────────────────────────── */
+  // ── NOTIFICATIONS ─────────────────────────────────────── */
   async function getNotifications() {
     const { data, error } = await db.from('notifications')
       .select('*').order('created_at', { ascending: false }).limit(50);
@@ -272,7 +262,7 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── CHAT (stanza unica) ───────────────────────── */
+  // ── CHAT (stanza unica) ───────────────────────────────── */
   async function getChatMessages() {
     const { data, error } = await db.from('chat_messages')
       .select('*, author:profiles(full_name,email)')
@@ -295,7 +285,6 @@ const DB = (() => {
     getAssignments, upsertAssignment, bulkUpsertAssignments, deleteAutoAssignments,
     getDistinctTipologie,
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
-    getNoteStatsRaw,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser,
     getAgentExclusions, addAgentExclusion, deleteAgentExclusion,
     getPracticeStatuses, getPracticeNotes, addPracticeNote,
