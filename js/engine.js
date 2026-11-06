@@ -94,7 +94,6 @@ const Engine = (() => {
           report_id:    p.report_id,
           colleague_id: result.colleague.id,
           is_manual:    false,
-          _pass:        result.pass,
         });
       } else {
         poolPractices.push({ ...p, _reason: _poolReason(p, activeColleagues, quotas, filterMap) });

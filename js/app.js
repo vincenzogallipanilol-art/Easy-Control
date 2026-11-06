@@ -573,7 +573,7 @@
       </div>`;
   }
 
-  // ── CHAT (stanza unica) ───────────────────────────────────────────
+  // ── CHAT (stanza unica, stile WhatsApp) ──────────────────
   function renderChat() {
     const el = document.getElementById('chat-content');
     if (!el) return;
@@ -581,17 +581,19 @@
     el.innerHTML = `
       <div class="card">
         <div class="card-header"><h3 class="card-title">Chat di gruppo</h3></div>
-        <div id="chat-messages" style="height:420px;overflow-y:auto;padding:1rem" class="d-flex flex-column gap-2">
-          ${chatMessages.length ? chatMessages.map(m => `
-            <div class="d-flex align-items-start gap-2">
-              <span class="avatar avatar-xs bg-blue-lt">${UI.initialsAvatar(m.author?.full_name || m.author?.email)}</span>
-              <div>
-                <div class="small"><strong>${escapeHtml(m.author?.full_name || m.author?.email || '—')}</strong>
-                  <span class="text-muted ms-1">${UI.timeAgo(m.created_at)}</span>
-                </div>
-                <div>${escapeHtml(m.body)}</div>
+        <div id="chat-messages" class="ec-chat-messages">
+          ${chatMessages.length ? chatMessages.map(m => {
+            const mine = m.author_id === session.user.id;
+            return `
+            <div class="ec-chat-row ${mine ? 'ec-chat-row--mine' : ''}">
+              ${!mine ? `<span class="avatar avatar-xs bg-blue-lt ec-chat-avatar">${UI.initialsAvatar(m.author?.full_name || m.author?.email)}</span>` : ''}
+              <div class="ec-chat-bubble ${mine ? 'ec-chat-bubble--mine' : ''}">
+                ${!mine ? `<div class="ec-chat-author">${escapeHtml(m.author?.full_name || m.author?.email || '—')}</div>` : ''}
+                <div class="ec-chat-body">${escapeHtml(m.body)}</div>
+                <div class="ec-chat-time">${UI.timeAgo(m.created_at)}</div>
               </div>
-            </div>`).join('') : '<div class="text-muted text-center py-4">Nessun messaggio ancora. Scrivi il primo!</div>'}
+            </div>`;
+          }).join('') : '<div class="text-muted text-center py-4">Nessun messaggio ancora. Scrivi il primo!</div>'}
         </div>
         <div class="card-footer">
           <div class="input-group">
