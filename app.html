@@ -9,7 +9,7 @@
 </head>
 <body class="antialiased">
 
-<!-- ── SCHERMATA DI ATTESA APPROVAZIONE ────────────────────────── -->
+<!-- ── SCHERMATA DI ATTESA APPROVAZIONE ────────────────── -->
 <div id="pending-screen" style="display:none">
   <div class="page page-center">
     <div class="container container-tight py-4 text-center">
@@ -86,16 +86,6 @@
             </a>
           </li>
 
-          <!-- Numeri (solo admin) -->
-          <li class="nav-item" data-admin-only>
-            <a class="nav-link" href="#" data-nav="numeri" title="Numeri">
-              <span class="nav-link-icon d-md-none d-lg-inline-block">
-                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-              </span>
-              <span class="nav-link-title ec-sidebar-label">Numeri</span>
-            </a>
-          </li>
-
           <!-- Admin (solo admin) -->
           <li class="nav-item" data-admin-only>
             <a class="nav-link" href="#" data-nav="admin" title="Configurazione">
@@ -124,7 +114,7 @@
     </div>
   </aside>
 
-  <!-- ── MAIN ──────────────────────────────────────────────────── -->
+  <!-- ── MAIN ──────────────────────────────────── -->
   <div class="page-wrapper">
 
     <!-- Top header -->
@@ -175,7 +165,7 @@
       </div>
     </div>
 
-    <!-- ── SECTIONS ─────────────────────────────────────────── -->
+    <!-- ── SECTIONS ────────────────────────────── -->
     <div class="page-body">
       <div class="container-xl">
 
@@ -192,16 +182,6 @@
         <!-- Pool -->
         <div data-section="pool" data-elevated-only style="display:none">
           <div id="pool-content">
-            <div class="text-center py-5 text-muted">
-              <div class="spinner-border text-primary mb-3" role="status"></div>
-              <p>Caricamento…</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Numeri (solo admin) -->
-        <div data-section="numeri" data-admin-only style="display:none">
-          <div id="numeri-content">
             <div class="text-center py-5 text-muted">
               <div class="spinner-border text-primary mb-3" role="status"></div>
               <p>Caricamento…</p>
@@ -347,7 +327,7 @@
   </div><!-- /page-wrapper -->
 </div><!-- /wrapper -->
 
-<!-- ── MODAL COLLEGA ─────────────────────────────────────────── -->
+<!-- ── MODAL COLLEGA ────────────────────────────── -->
 <div class="modal modal-blur fade" id="modal-colleague" tabindex="-1">
   <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
     <div class="modal-content">
@@ -424,7 +404,25 @@
   </div>
 </div>
 
-<!-- ── MODAL NOTA / STATO PRATICA ──────────────────────────────── -->
+<!-- ── MODAL SCHEDA COLLEGA (click su un box "Numeri per utente") ─ -->
+<div class="modal modal-blur fade" id="modal-scheda" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title" id="scheda-title">Scheda collega</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div id="scheda-content"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Chiudi</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── MODAL NOTA / STATO PRATICA ────────────────────── -->
 <div class="modal modal-blur fade" id="modal-note" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
@@ -460,7 +458,7 @@
   </div>
 </div>
 
-<!-- ── SCRIPTS ───────────────────────────────────────────────── -->
+<!-- ── SCRIPTS ──────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
