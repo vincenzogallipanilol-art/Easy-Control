@@ -7,7 +7,7 @@
   --ec-accent: #206bc4;
 }
 
-/* ── SIDEBAR ────────────────────────────────── */
+/* ── SIDEBAR ─────────────────────────────────── */
 .navbar-brand .navbar-brand-image {
   height: 28px;
 }
@@ -16,7 +16,53 @@
   letter-spacing: .02em;
 }
 
-/* ── KPI TILES ───────────────────────────────── */
+/* Sidebar solo icone, si espande al passaggio del mouse (solo desktop) */
+@media (min-width: 992px) {
+  .ec-sidebar {
+    width: 72px;
+    min-width: 72px;
+    transition: width .18s ease;
+    overflow: hidden;
+    z-index: 1030;
+  }
+  .ec-sidebar:hover {
+    width: 240px;
+  }
+  .ec-sidebar .ec-sidebar-label {
+    opacity: 0;
+    white-space: nowrap;
+    transition: opacity .12s ease;
+  }
+  .ec-sidebar:hover .ec-sidebar-label {
+    opacity: 1;
+  }
+  .ec-sidebar .nav-link {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .65rem .9rem;
+  }
+  .ec-sidebar .nav-link-icon {
+    margin: 0 !important;
+    flex-shrink: 0;
+  }
+  .ec-sidebar .navbar-brand {
+    padding-left: .5rem;
+    overflow: hidden;
+  }
+  /* Lo spazio occupato dalla sidebar fissa resta 72px anche quando si espande in overlay */
+  .ec-sidebar.navbar-vertical {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 100vh;
+  }
+  .page-wrapper {
+    margin-left: 72px;
+  }
+}
+
+/* ── KPI TILES ──────────────────────────────── */
 .card .avatar {
   width: 40px;
   height: 40px;
@@ -26,12 +72,12 @@
   border-radius: .5rem;
 }
 
-/* ── TABLE hover ─────────────────────────────── */
+/* ── TABLE hover ──────────────────────────── */
 .table-vcenter tbody tr:hover {
   background: rgba(32, 107, 196, .04);
 }
 
-/* ── TOAST ────────────────────────────────────── */
+/* ── TOAST ─────────────────────────────────── */
 .ec-toast {
   position: fixed;
   bottom: 1.5rem;
@@ -78,19 +124,19 @@
 [data-section] { animation: fadeIn .18s ease; }
 @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; } }
 
-/* ── MODE buttons in filter table ───────────────────── */
+/* ── MODE buttons in filter table ─────────────────── */
 .font-monospace { font-family: 'Courier New', monospace; }
 
-/* ── Empty state ──────────────────────────────── */
+/* ── Empty state ───────────────────────────── */
 .empty-icon svg { width: 48px; height: 48px; color: #a0aec0; }
 
-/* ── Responsive tweaks ─────────────────────────── */
+/* ── Responsive tweaks ───────────────────────── */
 @media (max-width: 768px) {
   .table-responsive { font-size: .8rem; }
   .ec-toast { left: 1rem; right: 1rem; bottom: 1rem; }
 }
 
-/* ── STATUS DOT (stato pratica) ──────────────────────── */
+/* ── STATUS DOT (stato pratica) ───────────────────── */
 .status-dot {
   display: inline-block;
   width: 12px;
@@ -160,12 +206,27 @@
   margin-top: .15rem;
 }
 
-/* ── NOTIFICHE ────────────────────────────────── */
+/* ── NOTIFICHE ──────────────────────────────── */
 #notif-badge { font-weight: 700; }
 #notif-dropdown .dropdown-item { white-space: normal; border-bottom: 1px solid #eef1f5; }
 #notif-dropdown .dropdown-item:last-child { border-bottom: none; }
 
-/* ── MODAL NOTA ─────────────────────────────── */
+/* ── RIGHE CLICCABILI (configurazione colleghi) ─────────── */
+.ec-row-clickable { cursor: pointer; }
+.ec-row-clickable:hover { background: rgba(32, 107, 196, .06); }
+
+/* ── CHECKLIST TIPOLOGIE (modal collega) ─────────────── */
+.ec-checklist {
+  max-height: 220px;
+  overflow-y: auto;
+  border: 1px solid #e6e9ef;
+  border-radius: .375rem;
+  padding: .5rem .75rem;
+  background: #fbfcfe;
+}
+.ec-checklist .form-check { margin-bottom: .25rem; }
+
+/* ── MODAL NOTA ──────────────────────────────── */
 #note-thread .avatar-xs {
   width: 22px; height: 22px; font-size: 10px; font-weight: 600;
   display: flex; align-items: center; justify-content: center; border-radius: 50%;
