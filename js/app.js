@@ -26,7 +26,7 @@
   const myColleagueId = profile.colleague_id || null;
 
   // 2. Mostra/nascondi elementi in base al ruolo (sistema piramidale)
-  //    - data-admin-only:     solo Admin (Configurazione, Numeri)
+  //    - data-admin-only:     solo Admin (Configurazione)
   //    - data-elevated-only:  Admin + Top (Dashboard, Pool)
   document.querySelectorAll('[data-admin-only]').forEach(el => {
     el.style.display = isAdmin ? '' : 'none';
@@ -51,7 +51,6 @@
   let practiceStatuses  = {};  // pratica_id → { color, updated_by, updated_at }
   let notifications     = [];
   let chatMessages      = [];
-  let noteStatsRaw      = [];  // per "Numeri" (admin)
   let _notePraticaId    = null;
   let _noteSelectedColor = null; // null = nessuna modifica di stato
   let _poolSearchTerm   = '';
@@ -63,7 +62,7 @@
 
   // Target di navigazione consentiti in base al ruolo
   const ELEVATED_TARGETS = ['dashboard', 'pool'];
-  const ADMIN_TARGETS    = ['numeri', 'admin'];
+  const ADMIN_TARGETS    = ['admin'];
   function isTargetAllowed(target) {
     if (ADMIN_TARGETS.includes(target))    return isAdmin;
     if (ELEVATED_TARGETS.includes(target)) return canSeeAll;
@@ -88,7 +87,6 @@
     history.replaceState(null, '', '#' + target);
 
     if (target === 'admin')  Admin.init();
-    if (target === 'numeri') renderNumeri();
     if (target === 'mine')   renderMine();
     if (target === 'chat')   { renderChat(); scrollChatToBottom(); }
   }
@@ -144,27 +142,22 @@
   // 5b. Carica dati globali (indipendenti dal report attivo)
   async function loadGlobalData() {
     try {
-      const calls = [
+      const [usersData, statusesData, notifData, chatData] = await Promise.all([
         DB.getUsers(),
         DB.getPracticeStatuses(),
         DB.getNotifications(),
         DB.getChatMessages(),
-      ];
-      if (isAdmin) calls.push(DB.getNoteStatsRaw());
-
-      const [usersData, statusesData, notifData, chatData, noteStats] = await Promise.all(calls);
+      ]);
       users = usersData;
       practiceStatuses = {};
       for (const s of statusesData) practiceStatuses[s.pratica_id] = s;
       notifications = notifData;
       chatMessages = chatData;
-      if (isAdmin) noteStatsRaw = noteStats || [];
 
       renderNotifBell();
       renderPool();
       renderMine();
       renderChat();
-      if (isAdmin && location.hash.replace('#','') === 'numeri') renderNumeri();
     } catch(e) {
       UI.toast('Errore caricamento dati: ' + e.message, 'danger');
     }
@@ -189,10 +182,6 @@
       onPracticeNote(payload) {
         if (_notePraticaId && payload.new?.pratica_id === _notePraticaId) {
           renderNoteThread();
-        }
-        if (isAdmin) {
-          noteStatsRaw.unshift(payload.new);
-          if (location.hash.replace('#','') === 'numeri') renderNumeri();
         }
       },
       onNotification(payload) {
@@ -378,7 +367,91 @@
             </tbody>
           </table>
         </div>
+      </div>
+
+      <h3 class="mt-4 mb-2">Numeri per utente</h3>
+      ${renderColleagueBoxes()}`;
+  }
+
+  function renderColleagueBoxes() {
+    // Aggrega le pratiche assegnate per collega, raggruppate per tipologia ("prodotto")
+    const byColleague = {}; // colleague_id -> { total, byTipologia: {tipologia: count} }
+    for (const p of practices) {
+      const a = assignments[p.id];
+      if (!a) continue;
+      if (!byColleague[a.colleague_id]) byColleague[a.colleague_id] = { total: 0, byTipologia: {} };
+      const b = byColleague[a.colleague_id];
+      b.total++;
+      const tip = p.tipologia || 'Altro';
+      b.byTipologia[tip] = (b.byTipologia[tip] || 0) + 1;
+    }
+
+    const activeColleagues = colleagues.filter(c => c.active);
+    if (!activeColleagues.length) return '';
+
+    return `
+      <div class="row g-3">
+        ${activeColleagues.map(c => {
+          const stats = byColleague[c.id] || { total: 0, byTipologia: {} };
+          const tipRows = Object.entries(stats.byTipologia).sort((a, b) => b[1] - a[1]);
+          const color = UI.colleagueColor(c.color_idx);
+          return `
+          <div class="col-sm-6 col-lg-4">
+            <div class="card ec-user-box h-100" onclick="App.openColleagueScheda('${c.id}')">
+              <div class="card-body">
+                <div class="d-flex align-items-center gap-2 mb-2">
+                  <span class="avatar avatar-sm bg-${color}-lt">${c.name[0]}</span>
+                  <strong>${c.name}</strong>
+                  <span class="ms-auto badge bg-${color}-lt text-${color}">${stats.total}</span>
+                </div>
+                ${tipRows.length ? `
+                  <div class="small text-muted">
+                    ${tipRows.map(([tip, cnt]) => `<div class="d-flex justify-content-between gap-2"><span class="text-truncate">${tip}</span><strong>${cnt}</strong></div>`).join('')}
+                  </div>` : '<div class="small text-muted">Nessuna pratica assegnata</div>'}
+              </div>
+            </div>
+          </div>`;
+        }).join('')}
       </div>`;
+  }
+
+  function openColleagueScheda(colleagueId) {
+    const c = colleagues.find(x => x.id === colleagueId);
+    if (!c) return;
+
+    document.getElementById('scheda-title').textContent = `Scheda — ${c.name}`;
+
+    const myAssignments = Object.values(assignments).filter(a => a.colleague_id === colleagueId);
+    const ids = new Set(myAssignments.map(a => a.practice_id));
+    const list = practices.filter(p => ids.has(p.id));
+
+    const el = document.getElementById('scheda-content');
+    if (!list.length) {
+      el.innerHTML = UI.emptyState(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="20 6 9 17 4 12"/></svg>',
+        'Nessuna pratica assegnata a questo collega'
+      );
+    } else {
+      el.innerHTML = `
+        <div class="table-responsive">
+          <table class="table table-sm table-vcenter card-table">
+            <thead><tr><th>Stato</th><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato Attuale</th><th></th></tr></thead>
+            <tbody>
+              ${list.map(p => `
+                <tr>
+                  <td style="cursor:pointer" onclick="App.openNoteModal('${p.pratica_id}')">${UI.statusDot(practiceStatuses[p.pratica_id]?.color)}</td>
+                  <td class="font-monospace small">${p.pratica_id || '—'}</td>
+                  <td>${p.cognome} ${p.nome}</td>
+                  <td class="text-muted small">${p.tipologia || '—'}</td>
+                  <td>${UI.statoBadge(p.stato_attuale)}</td>
+                  <td><button class="btn btn-sm btn-outline-secondary" onclick="App.openNoteModal('${p.pratica_id}')">Nota</button></td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }
+
+    bootstrap.Modal.getOrCreateInstance(document.getElementById('modal-scheda')).show();
   }
 
   const REASON_LABELS = {
@@ -559,9 +632,8 @@
   function iconPool()  { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`; }
   function iconCal()   { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`; }
   function iconExcl()  { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`; }
-  function iconChart()  { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`; }
 
-  // ── LE MIE PRATICHE ───────────────────────────── */
+  // ── LE MIE PRATICHE ────────────────────────────────────── */
   function renderMine() {
     const el = document.getElementById('mine-content');
     if (!el) return;
@@ -617,97 +689,7 @@
       </div>`;
   }
 
-  // ── NUMERI (admin): cronologia controlli per utente ───────── */
-  function renderNumeri() {
-    const el = document.getElementById('numeri-content');
-    if (!el || !isAdmin) return;
-
-    if (!noteStatsRaw.length) {
-      el.innerHTML = UI.emptyState(
-        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
-        'Nessuna nota/cambio stato registrato finora.'
-      );
-      return;
-    }
-
-    const userName = id => {
-      const u = users.find(x => x.id === id);
-      return u ? (u.full_name || u.email) : 'Utente eliminato';
-    };
-
-    const todayStr = new Date().toISOString().slice(0, 10);
-    const sevenAgo  = Date.now() - 7  * 86400000;
-    const thirtyAgo = Date.now() - 30 * 86400000;
-
-    // Aggrega per utente
-    const byUser = {}; // author_id -> { total, today, last7, last30, lastAt, byDay: {date: count} }
-    for (const r of noteStatsRaw) {
-      const uid = r.author_id;
-      if (!byUser[uid]) byUser[uid] = { total: 0, today: 0, last7: 0, last30: 0, lastAt: null, byDay: {} };
-      const b = byUser[uid];
-      const t = new Date(r.created_at).getTime();
-      const day = r.created_at.slice(0, 10);
-      b.total++;
-      b.byDay[day] = (b.byDay[day] || 0) + 1;
-      if (day === todayStr) b.today++;
-      if (t >= sevenAgo)  b.last7++;
-      if (t >= thirtyAgo) b.last30++;
-      if (!b.lastAt || t > new Date(b.lastAt).getTime()) b.lastAt = r.created_at;
-    }
-
-    // Ultimi 14 giorni per lo sparkline
-    const days = [];
-    for (let i = 13; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 86400000);
-      days.push(d.toISOString().slice(0, 10));
-    }
-
-    const rows = Object.entries(byUser).sort((a, b) => b[1].total - a[1].total);
-    const maxDay = Math.max(1, ...rows.flatMap(([, b]) => days.map(d => b.byDay[d] || 0)));
-
-    el.innerHTML = `
-      <div class="row g-3 mb-4">
-        ${UI.kpiTile('Controlli totali', noteStatsRaw.length, iconChart(), 'blue')}
-        ${UI.kpiTile('Oggi', rows.reduce((s, [, b]) => s + b.today, 0), iconCheck(), 'green')}
-        ${UI.kpiTile('Ultimi 7 giorni', rows.reduce((s, [, b]) => s + b.last7, 0), iconCal(), 'orange')}
-        ${UI.kpiTile('Utenti attivi', rows.length, iconPool(), 'purple')}
-      </div>
-      <div class="card">
-        <div class="card-header">
-          <h3 class="card-title">Cronologia controlli per utente</h3>
-          <div class="card-options"><small class="text-muted">Note e cambi di stato salvati, ultimi 14 giorni</small></div>
-        </div>
-        <div class="table-responsive">
-          <table class="table table-vcenter card-table">
-            <thead>
-              <tr><th>Utente</th><th>Totale</th><th>Oggi</th><th>7 gg</th><th>30 gg</th><th>Ultimo controllo</th><th style="min-width:180px">Ultimi 14 giorni</th></tr>
-            </thead>
-            <tbody>
-              ${rows.map(([uid, b]) => `
-                <tr>
-                  <td><strong>${escapeHtml(userName(uid))}</strong></td>
-                  <td>${b.total}</td>
-                  <td>${b.today}</td>
-                  <td>${b.last7}</td>
-                  <td>${b.last30}</td>
-                  <td class="text-muted small">${b.lastAt ? UI.timeAgo(b.lastAt) : '—'}</td>
-                  <td>
-                    <div style="display:flex;align-items:flex-end;gap:2px;height:28px">
-                      ${days.map(d => {
-                        const v = b.byDay[d] || 0;
-                        const h = Math.max(2, Math.round((v / maxDay) * 28));
-                        return `<div title="${d}: ${v}" style="width:8px;height:${h}px;background:${v ? '#206bc4' : '#e6e9ef'};border-radius:1px"></div>`;
-                      }).join('')}
-                    </div>
-                  </td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>
-      </div>`;
-  }
-
-  // ── CHAT (stanza unica) ──────────────────────────── */
+  // ── CHAT (stanza unica) ───────────────────────────────────── */
   function renderChat() {
     const el = document.getElementById('chat-content');
     if (!el) return;
@@ -763,7 +745,7 @@
     }
   }
 
-  // ── NOTIFICHE ───────────────────────────────── */
+  // ── NOTIFICHE ──────────────────────────────────────────── */
   function renderNotifBell() {
     const badge = document.getElementById('notif-badge');
     const dropdown = document.getElementById('notif-dropdown');
@@ -800,7 +782,7 @@
     if (praticaId) openNoteModal(praticaId);
   }
 
-  // ── MODAL NOTA / STATO PRATICA ──────────────────── */
+  // ── MODAL NOTA / STATO PRATICA ─────────────────────────────── */
   function openNoteModal(praticaId) {
     _notePraticaId = praticaId;
     _noteSelectedColor = (practiceStatuses[praticaId] && practiceStatuses[praticaId].color) || null;
@@ -894,7 +876,7 @@
     }
   }
 
-  // ── Pool: ricerca client-side (senza perdere il focus dell'input) ── */
+  // ── Pool: ricerca client-side (senza perdere il focus dell'input) ──
   function filterPool(term) {
     _poolSearchTerm = (term || '').toLowerCase().trim();
     document.querySelectorAll('.pool-row').forEach(row => {
@@ -911,7 +893,7 @@
   // Esporta funzioni per onclick inline
   Object.assign(window.AppRuntime, {
     openNoteModal, selectNoteColor, submitNote, sendChat,
-    openNotification, filterPool, showAllPool,
+    openNotification, filterPool, showAllPool, openColleagueScheda,
   });
   window.App = window.AppRuntime;
 
