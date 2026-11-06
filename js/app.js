@@ -21,12 +21,18 @@
     return;
   }
 
-  const isAdmin = Auth.isAdmin();
+  const isAdmin    = Auth.isAdmin();
+  const canSeeAll  = Auth.canSeeAll();   // admin + top: vedono Dashboard/Pool/tutte le pratiche
   const myColleagueId = profile.colleague_id || null;
 
-  // 2. Mostra/nascondi elementi admin
+  // 2. Mostra/nascondi elementi in base al ruolo (sistema piramidale)
+  //    - data-admin-only:     solo Admin (Configurazione, Numeri)
+  //    - data-elevated-only:  Admin + Top (Dashboard, Pool)
   document.querySelectorAll('[data-admin-only]').forEach(el => {
     el.style.display = isAdmin ? '' : 'none';
+  });
+  document.querySelectorAll('[data-elevated-only]').forEach(el => {
+    el.style.display = canSeeAll ? '' : 'none';
   });
   document.getElementById('user-name-display').textContent = profile.full_name || profile.email;
   document.getElementById('user-role-badge').innerHTML = UI.renderRoleBadge(profile.role);
@@ -35,16 +41,17 @@
   //     referenzia queste variabili fin dalla prima chiamata)
   let activeReport     = null;
   let practices        = [];
-  let assignments      = {};  // practice_id → assignment
-  let colleagues       = [];
-  let stateFilters     = [];
-  let config           = {};
-  let agentExclusions  = [];
+  let assignments       = {};  // practice_id → assignment
+  let colleagues        = [];
+  let colleagueStateFilters = []; // righe colleague_state_filters (tutti i colleghi)
+  let config            = {};
+  let agentExclusions   = [];
 
   let users             = [];
   let practiceStatuses  = {};  // pratica_id → { color, updated_by, updated_at }
   let notifications     = [];
-  let chatMessages       = [];
+  let chatMessages      = [];
+  let noteStatsRaw      = [];  // per "Numeri" (admin)
   let _notePraticaId    = null;
   let _noteSelectedColor = null; // null = nessuna modifica di stato
   let _poolSearchTerm   = '';
@@ -54,18 +61,36 @@
     return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // Target di navigazione consentiti in base al ruolo
+  const ELEVATED_TARGETS = ['dashboard', 'pool'];
+  const ADMIN_TARGETS    = ['numeri', 'admin'];
+  function isTargetAllowed(target) {
+    if (ADMIN_TARGETS.includes(target))    return isAdmin;
+    if (ELEVATED_TARGETS.includes(target)) return canSeeAll;
+    return true; // mine, chat: sempre consentiti
+  }
+  function defaultTarget() {
+    return canSeeAll ? 'dashboard' : 'mine';
+  }
+
   // 3. Navigazione SPA
   const navLinks = document.querySelectorAll('[data-nav]');
   const sections = document.querySelectorAll('[data-section]');
 
   function navigate(target) {
+    if (!isTargetAllowed(target)) target = defaultTarget();
+
     navLinks.forEach(l => l.classList.toggle('active', l.dataset.nav === target));
-    sections.forEach(s => s.style.display = s.dataset.section === target ? '' : 'none');
+    sections.forEach(s => {
+      const allowed = isTargetAllowed(s.dataset.section);
+      s.style.display = (allowed && s.dataset.section === target) ? '' : 'none';
+    });
     history.replaceState(null, '', '#' + target);
 
-    if (target === 'admin' && isAdmin) Admin.init();
-    if (target === 'mine') renderMine();
-    if (target === 'chat') { renderChat(); scrollChatToBottom(); }
+    if (target === 'admin')  Admin.init();
+    if (target === 'numeri') renderNumeri();
+    if (target === 'mine')   renderMine();
+    if (target === 'chat')   { renderChat(); scrollChatToBottom(); }
   }
 
   navLinks.forEach(l => l.addEventListener('click', e => {
@@ -74,7 +99,7 @@
   }));
 
   // Restore from hash
-  const initialHash = location.hash.replace('#', '') || 'dashboard';
+  const initialHash = location.hash.replace('#', '') || defaultTarget();
   navigate(initialHash);
 
   // 4. Logout
@@ -87,10 +112,10 @@
   async function loadActiveReport() {
     UI.showLoader('Caricamento report…');
     try {
-      [activeReport, colleagues, stateFilters, config, agentExclusions] = await Promise.all([
+      [activeReport, colleagues, colleagueStateFilters, config, agentExclusions] = await Promise.all([
         DB.getActiveReport(),
         DB.getColleagues(),
-        DB.getStateFilters(),
+        DB.getAllColleagueStateFilters(),
         DB.getConfig(),
         DB.getAgentExclusions(),
       ]);
@@ -119,22 +144,27 @@
   // 5b. Carica dati globali (indipendenti dal report attivo)
   async function loadGlobalData() {
     try {
-      const [usersData, statusesData, notifData, chatData] = await Promise.all([
+      const calls = [
         DB.getUsers(),
         DB.getPracticeStatuses(),
         DB.getNotifications(),
         DB.getChatMessages(),
-      ]);
+      ];
+      if (isAdmin) calls.push(DB.getNoteStatsRaw());
+
+      const [usersData, statusesData, notifData, chatData, noteStats] = await Promise.all(calls);
       users = usersData;
       practiceStatuses = {};
       for (const s of statusesData) practiceStatuses[s.pratica_id] = s;
       notifications = notifData;
       chatMessages = chatData;
+      if (isAdmin) noteStatsRaw = noteStats || [];
 
       renderNotifBell();
       renderPool();
       renderMine();
       renderChat();
+      if (isAdmin && location.hash.replace('#','') === 'numeri') renderNumeri();
     } catch(e) {
       UI.toast('Errore caricamento dati: ' + e.message, 'danger');
     }
@@ -159,6 +189,10 @@
       onPracticeNote(payload) {
         if (_notePraticaId && payload.new?.pratica_id === _notePraticaId) {
           renderNoteThread();
+        }
+        if (isAdmin) {
+          noteStatsRaw.unshift(payload.new);
+          if (location.hash.replace('#','') === 'numeri') renderNumeri();
         }
       },
       onNotification(payload) {
@@ -192,6 +226,8 @@
       },
       onColleaguesChange() { DB.getColleagues().then(d => { colleagues = d; renderDistribution(); }); },
       onAgentExclusionsChange() { DB.getAgentExclusions().then(d => { agentExclusions = d; renderDistribution(); }); },
+      onConfigChange() { DB.getConfig().then(d => { config = d; renderDashboard(); }); },
+      onColleagueFiltersChange() { DB.getAllColleagueStateFilters().then(d => { colleagueStateFilters = d; renderDistribution(); }); },
     });
   }
 
@@ -205,7 +241,8 @@
       await DB.deleteAutoAssignments(activeReport.id);
 
       const { autoAssignments } = Engine.distribute(
-        practices, colleagues, stateFilters, config.working_days || 1, manualAssignments, agentExclusions
+        practices, colleagues, colleagueStateFilters, config.working_days || 1,
+        manualAssignments, agentExclusions, config.sally_hook_colleague_id || null
       );
 
       if (autoAssignments.length) {
@@ -269,7 +306,8 @@
       await loadActiveReport();
 
       const { autoAssignments } = Engine.distribute(
-        practices, colleagues, stateFilters, config.working_days || 1, [], agentExclusions
+        practices, colleagues, colleagueStateFilters, config.working_days || 1,
+        [], agentExclusions, config.sally_hook_colleague_id || null
       );
       if (autoAssignments.length) {
         const { data: { user } } = await db.auth.getUser();
@@ -299,19 +337,21 @@
     if (!el || !activeReport) return;
 
     const { kpi } = Engine.distribute(
-      practices, colleagues, stateFilters, config.working_days || 1,
-      Object.values(assignments).filter(a => a.is_manual), agentExclusions
+      practices, colleagues, colleagueStateFilters, config.working_days || 1,
+      Object.values(assignments).filter(a => a.is_manual), agentExclusions,
+      config.sally_hook_colleague_id || null
     );
 
     const assignedCount = Object.keys(assignments).length;
-    const regularPool   = practices.length - assignedCount - kpi.excluded;
+    const regularPool   = practices.length - assignedCount - kpi.excluded - kpi.sallyHooked;
 
     el.innerHTML = `
       <div class="row g-3 mb-4">
         ${UI.kpiTile('Pratiche totali',   practices.length,       iconDoc(),      'blue')}
         ${UI.kpiTile('Assegnate',         assignedCount,          iconCheck(),    'green')}
         ${UI.kpiTile('In Pool',           Math.max(0, regularPool), iconPool(),   'orange')}
-        ${agentExclusions.length ? UI.kpiTile('Agenti esclusi', kpi.excluded, iconExcl(), 'red') : ''}
+        ${kpi.sallyHooked ? UI.kpiTile('Agenti Sally (agganciati)', kpi.sallyHooked, iconExcl(), 'teal') : ''}
+        ${kpi.excluded ? UI.kpiTile('Agenti Sally (pool)', kpi.excluded, iconExcl(), 'red') : ''}
         ${UI.kpiTile('Giorni lavorativi', config.working_days || 1, iconCal(),   'purple')}
       </div>
       <div class="card">
@@ -343,6 +383,7 @@
 
   const REASON_LABELS = {
     tipologia_no_match: 'Nessun collega per questa tipologia',
+    filtro_stato:       'Filtro stato nessun collega',
     quota_full:         'Quota piena',
     other:              'Altro',
   };
@@ -353,16 +394,18 @@
 
     const assignedIds  = new Set(Object.keys(assignments));
     const excludedSet  = new Set((agentExclusions || []).map(a => (a.agent_name || '').toLowerCase().trim()));
+    const sallyHooked  = !!(config.sally_hook_colleague_id && colleagues.some(c => c.id === config.sally_hook_colleague_id && c.active));
 
-    // Separa pool normale da pool agenti esclusi (match SOLO su agente_attuale)
+    // Separa pool normale da pool Agenti Sally (match SOLO su agente_attuale)
     const unassigned   = practices.filter(p => !assignedIds.has(p.id));
-    const excludedPool = unassigned.filter(p => excludedSet.size > 0 && excludedSet.has((p.agente_attuale || '').toLowerCase().trim()));
+    const sallyPool    = sallyHooked ? [] : unassigned.filter(p => excludedSet.size > 0 && excludedSet.has((p.agente_attuale || '').toLowerCase().trim()));
     const regularPool  = unassigned.filter(p => !excludedSet.has((p.agente_attuale || '').toLowerCase().trim()));
 
-    // Motivo (riusa il calcolo dell'engine, già esistente, mai mostrato finora)
+    // Motivo (riusa il calcolo dell'engine)
     const { poolPractices } = Engine.distribute(
-      practices, colleagues, stateFilters, config.working_days || 1,
-      Object.values(assignments).filter(a => a.is_manual), agentExclusions
+      practices, colleagues, colleagueStateFilters, config.working_days || 1,
+      Object.values(assignments).filter(a => a.is_manual), agentExclusions,
+      config.sally_hook_colleague_id || null
     );
     const reasonMap = {};
     for (const p of poolPractices) reasonMap[p.id] = p._reason;
@@ -421,24 +464,24 @@
           </div>` : ''}
       </div>` : ''}
 
-      ${excludedPool.length ? `
+      ${sallyPool.length ? `
       <div class="card border-danger">
         <div class="card-header bg-danger-lt">
           <h3 class="card-title text-danger">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>
-            Pool agenti esclusi — ${excludedPool.length} pratiche
+            Agenti Sally — ${sallyPool.length} pratiche
           </h3>
           <div class="card-options">
-            <small class="text-muted">Pratiche ignorate dalla distribuzione automatica (agente_attuale in lista esclusioni)</small>
+            <small class="text-muted">Pool separata, non agganciata a nessun collega</small>
           </div>
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
             <thead><tr><th></th><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Motivo</th><th>Agente attuale</th></tr></thead>
-            <tbody>${excludedPool.slice(0, 200).map(p => poolRow(p, false)).join('')}</tbody>
+            <tbody>${sallyPool.slice(0, 200).map(p => poolRow(p, false)).join('')}</tbody>
           </table>
         </div>
-        ${excludedPool.length > 200 ? `<div class="card-footer text-muted text-center small">Mostrate 200 su ${excludedPool.length}</div>` : ''}
+        ${sallyPool.length > 200 ? `<div class="card-footer text-muted text-center small">Mostrate 200 su ${sallyPool.length}</div>` : ''}
       </div>` : ''}`;
 
     if (_poolSearchTerm) filterPool(_poolSearchTerm);
@@ -516,8 +559,9 @@
   function iconPool()  { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>`; }
   function iconCal()   { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>`; }
   function iconExcl()  { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/></svg>`; }
+  function iconChart()  { return `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>`; }
 
-  // ── LE MIE PRATICHE ───────────────────────────────────────────────
+  // ── LE MIE PRATICHE ───────────────────────────── */
   function renderMine() {
     const el = document.getElementById('mine-content');
     if (!el) return;
@@ -573,7 +617,97 @@
       </div>`;
   }
 
-  // ── CHAT (stanza unica, stile WhatsApp) ──────────────────
+  // ── NUMERI (admin): cronologia controlli per utente ───────── */
+  function renderNumeri() {
+    const el = document.getElementById('numeri-content');
+    if (!el || !isAdmin) return;
+
+    if (!noteStatsRaw.length) {
+      el.innerHTML = UI.emptyState(
+        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>',
+        'Nessuna nota/cambio stato registrato finora.'
+      );
+      return;
+    }
+
+    const userName = id => {
+      const u = users.find(x => x.id === id);
+      return u ? (u.full_name || u.email) : 'Utente eliminato';
+    };
+
+    const todayStr = new Date().toISOString().slice(0, 10);
+    const sevenAgo  = Date.now() - 7  * 86400000;
+    const thirtyAgo = Date.now() - 30 * 86400000;
+
+    // Aggrega per utente
+    const byUser = {}; // author_id -> { total, today, last7, last30, lastAt, byDay: {date: count} }
+    for (const r of noteStatsRaw) {
+      const uid = r.author_id;
+      if (!byUser[uid]) byUser[uid] = { total: 0, today: 0, last7: 0, last30: 0, lastAt: null, byDay: {} };
+      const b = byUser[uid];
+      const t = new Date(r.created_at).getTime();
+      const day = r.created_at.slice(0, 10);
+      b.total++;
+      b.byDay[day] = (b.byDay[day] || 0) + 1;
+      if (day === todayStr) b.today++;
+      if (t >= sevenAgo)  b.last7++;
+      if (t >= thirtyAgo) b.last30++;
+      if (!b.lastAt || t > new Date(b.lastAt).getTime()) b.lastAt = r.created_at;
+    }
+
+    // Ultimi 14 giorni per lo sparkline
+    const days = [];
+    for (let i = 13; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      days.push(d.toISOString().slice(0, 10));
+    }
+
+    const rows = Object.entries(byUser).sort((a, b) => b[1].total - a[1].total);
+    const maxDay = Math.max(1, ...rows.flatMap(([, b]) => days.map(d => b.byDay[d] || 0)));
+
+    el.innerHTML = `
+      <div class="row g-3 mb-4">
+        ${UI.kpiTile('Controlli totali', noteStatsRaw.length, iconChart(), 'blue')}
+        ${UI.kpiTile('Oggi', rows.reduce((s, [, b]) => s + b.today, 0), iconCheck(), 'green')}
+        ${UI.kpiTile('Ultimi 7 giorni', rows.reduce((s, [, b]) => s + b.last7, 0), iconCal(), 'orange')}
+        ${UI.kpiTile('Utenti attivi', rows.length, iconPool(), 'purple')}
+      </div>
+      <div class="card">
+        <div class="card-header">
+          <h3 class="card-title">Cronologia controlli per utente</h3>
+          <div class="card-options"><small class="text-muted">Note e cambi di stato salvati, ultimi 14 giorni</small></div>
+        </div>
+        <div class="table-responsive">
+          <table class="table table-vcenter card-table">
+            <thead>
+              <tr><th>Utente</th><th>Totale</th><th>Oggi</th><th>7 gg</th><th>30 gg</th><th>Ultimo controllo</th><th style="min-width:180px">Ultimi 14 giorni</th></tr>
+            </thead>
+            <tbody>
+              ${rows.map(([uid, b]) => `
+                <tr>
+                  <td><strong>${escapeHtml(userName(uid))}</strong></td>
+                  <td>${b.total}</td>
+                  <td>${b.today}</td>
+                  <td>${b.last7}</td>
+                  <td>${b.last30}</td>
+                  <td class="text-muted small">${b.lastAt ? UI.timeAgo(b.lastAt) : '—'}</td>
+                  <td>
+                    <div style="display:flex;align-items:flex-end;gap:2px;height:28px">
+                      ${days.map(d => {
+                        const v = b.byDay[d] || 0;
+                        const h = Math.max(2, Math.round((v / maxDay) * 28));
+                        return `<div title="${d}: ${v}" style="width:8px;height:${h}px;background:${v ? '#206bc4' : '#e6e9ef'};border-radius:1px"></div>`;
+                      }).join('')}
+                    </div>
+                  </td>
+                </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  // ── CHAT (stanza unica) ──────────────────────────── */
   function renderChat() {
     const el = document.getElementById('chat-content');
     if (!el) return;
@@ -629,7 +763,7 @@
     }
   }
 
-  // ── NOTIFICHE ──────────────────────────────────────────────────────
+  // ── NOTIFICHE ───────────────────────────────── */
   function renderNotifBell() {
     const badge = document.getElementById('notif-badge');
     const dropdown = document.getElementById('notif-dropdown');
@@ -666,7 +800,7 @@
     if (praticaId) openNoteModal(praticaId);
   }
 
-  // ── MODAL NOTA / STATO PRATICA ─────────────────────────────────────
+  // ── MODAL NOTA / STATO PRATICA ──────────────────── */
   function openNoteModal(praticaId) {
     _notePraticaId = praticaId;
     _noteSelectedColor = (practiceStatuses[praticaId] && practiceStatuses[praticaId].color) || null;
@@ -760,7 +894,7 @@
     }
   }
 
-  // ── Pool: ricerca client-side (senza perdere il focus dell'input) ──
+  // ── Pool: ricerca client-side (senza perdere il focus dell'input) ── */
   function filterPool(term) {
     _poolSearchTerm = (term || '').toLowerCase().trim();
     document.querySelectorAll('.pool-row').forEach(row => {
