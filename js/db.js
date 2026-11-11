@@ -3,6 +3,27 @@
 // ================================================================
 const DB = (() => {
 
+  // Legge tutte le righe di una query a pagine (PostgREST limita ogni risposta)
+  async function fetchAll(build, page = 1000) {
+    let all = [], from = 0;
+    while (true) {
+      const { data, error } = await build().range(from, from + page - 1);
+      if (error) throw error;
+      all = all.concat(data);
+      if (data.length < page) break;
+      from += page;
+    }
+    return all;
+  }
+
+  // Tabella/colonna/funzione non ancora creata (migration SQL non eseguita)?
+  function isMissingSchema(error) {
+    const code = (error && error.code) || '';
+    const msg  = ((error && error.message) || '').toLowerCase();
+    return ['42P01', '42703', '42883', 'PGRST202', 'PGRST204', 'PGRST205'].includes(code)
+      || msg.includes('does not exist') || msg.includes('could not find');
+  }
+
   // ── CONFIG ──────────────────────────────────────────── */
   async function getConfig() {
     const { data, error } = await db.from('app_config').select('key,value');
@@ -36,8 +57,15 @@ const DB = (() => {
     return data;
   }
   async function upsertColleague(col) {
-    const { error } = await db.from('colleagues').upsert(col);
+    let { error } = await db.from('colleagues').upsert(col);
+    if (error && isMissingSchema(error) && 'excluded_agents' in col) {
+      // colonna excluded_agents non ancora creata: salva il resto
+      const { excluded_agents, ...rest } = col;
+      ({ error } = await db.from('colleagues').upsert(rest));
+      if (!error) return { partial: true };
+    }
     if (error) throw error;
+    return { partial: false };
   }
   async function deleteColleague(id) {
     const { error } = await db.from('colleagues').delete().eq('id', id);
@@ -81,26 +109,12 @@ const DB = (() => {
     }
   }
   async function getPractices(reportId) {
-    const PAGE = 5000;
-    let all = [], from = 0;
-    while (true) {
-      const { data, error } = await db.from('practices')
-        .select('*').eq('report_id', reportId)
-        .range(from, from + PAGE - 1);
-      if (error) throw error;
-      all = all.concat(data);
-      if (data.length < PAGE) break;
-      from += PAGE;
-    }
-    return all;
+    return fetchAll(() => db.from('practices').select('*').eq('report_id', reportId));
   }
 
   // ── ASSIGNMENTS ───────────────────────────────────── */
   async function getAssignments(reportId) {
-    const { data, error } = await db.from('assignments')
-      .select('*').eq('report_id', reportId);
-    if (error) throw error;
-    return data;
+    return fetchAll(() => db.from('assignments').select('*').eq('report_id', reportId).order('id'));
   }
   async function upsertAssignment(assignment) {
     const { error } = await db.from('assignments')
@@ -138,17 +152,20 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── TIPOLOGIE (distinct, per select nel modal collega) ───────── */
-  async function getDistinctTipologie() {
-    const { data, error } = await db.from('practices').select('tipologia');
-    if (error) throw error;
+  // ── VALORI DISTINTI dal report attivo (per il modal collega) ──────
+  async function getDistinct(column) {
+    const report = await getActiveReport();
+    if (!report) return [];
+    const rows = await fetchAll(() => db.from('practices').select(column).eq('report_id', report.id));
     const set = new Set();
-    for (const r of data) {
-      const t = (r.tipologia || '').trim();
+    for (const r of rows) {
+      const t = (r[column] || '').trim();
       if (t) set.add(t);
     }
     return Array.from(set).sort((a, b) => a.localeCompare(b, 'it'));
   }
+  const getDistinctTipologie = () => getDistinct('tipologia');
+  const getDistinctAgenti    = () => getDistinct('agente_attuale');
 
   // ── FILTRI STATO PER COLLEGA ─────────────────────────── */
   async function getAllColleagueStateFilters() {
@@ -195,54 +212,68 @@ const DB = (() => {
     if (error) throw error;
   }
 
-  // ── PRACTICE STATUS / NOTE (chiave = pratica_id, non l'id tecnico) ─ */
-  async function getPracticeStatuses() {
-    const { data, error } = await db.from('practice_status').select('*');
-    if (error) throw error;
-    return data;
+  // ── PIANO DI LAVORO: stato/nota per pratica (chiave = pratica_id) ──
+  // Carica solo le righe che servono: stati di oggi, pratiche nei pool,
+  // note senza stato e chiusure del report attivo.
+  async function getOpenWork(reportId, sinceIso) {
+    const parts = [
+      'status.is.null',
+      'status.in.(audit,help,xflat)',
+      `and(status.eq.da_chiamare,or(called.is.false,called_at.gte.${sinceIso}))`,
+      `set_at.gte.${sinceIso}`,
+    ];
+    if (reportId) parts.push(`report_id.eq.${reportId}`);
+    return fetchAll(() => db.from('practice_work').select('*')
+      .is('closed_at', null).or(parts.join(',')).order('pratica_id'));
   }
-  async function getPracticeNotes(praticaId) {
-    const { data, error } = await db.from('practice_notes')
-      .select('*, author:profiles(full_name,email)')
-      .eq('pratica_id', praticaId)
-      .order('created_at', { ascending: true });
+
+  // Imposta stato + nota. Ritorna la riga aggiornata, o null se rimossa.
+  async function setPracticeWork({ praticaId, status, note, reportId, colleagueId, practice }) {
+    const p = practice || {};
+    const { data, error } = await db.rpc('set_practice_work', {
+      p_pratica_id:   praticaId,
+      p_status:       status || '',
+      p_note:         note || '',
+      p_report_id:    reportId || null,
+      p_colleague_id: colleagueId || null,
+      p_cognome:      p.cognome || '',
+      p_nome:         p.nome || '',
+      p_tipologia:    p.tipologia || '',
+      p_istituto:     p.istituto_finanziario || '',
+      p_agente:       p.agente_attuale || '',
+    });
     if (error) throw error;
-    return data;
+    return (data && data[0]) || null;
   }
-  async function addPracticeNote({ praticaId, body, color, mentions }) {
+
+  // Aggiornamenti nei pool (Chiamato, note chiamata/gestione, chiusura)
+  async function updateWork(praticaId, patch) {
+    const { data, error } = await db.from('practice_work')
+      .update({ ...patch, updated_at: new Date().toISOString() })
+      .eq('pratica_id', praticaId).select();
+    if (error) throw error;
+    return (data && data[0]) || null;
+  }
+  async function closeWork(praticaId) {
     const { data: { user } } = await db.auth.getUser();
-    const { data, error } = await db.from('practice_notes').insert({
-      pratica_id: praticaId,
-      author_id:  user.id,
-      body:       body || '',
-      color:      color || null,
-      mentions:   mentions && mentions.length ? mentions : [],
-    }).select().single();
+    return updateWork(praticaId, { closed_at: new Date().toISOString(), closed_by: user.id });
+  }
+
+  // Conteggi delle pratiche controllate: per collega/stato, oggi/settimana/mese/totale
+  async function getCheckStats() {
+    const { data, error } = await db.rpc('check_stats');
     if (error) throw error;
+    return data || [];
+  }
 
-    if (color) {
-      const { error: e2 } = await db.from('practice_status').upsert({
-        pratica_id: praticaId, color, updated_by: user.id, updated_at: new Date().toISOString(),
-      });
-      if (e2) throw e2;
-    }
-
-    if (mentions && mentions.length) {
-      const rows = mentions
-        .filter(uid => uid !== user.id)
-        .map(uid => ({
-          user_id:    uid,
-          type:       'mention',
-          title:      'Sei stato taggato in una nota',
-          body:       (body || '').slice(0, 200),
-          pratica_id: praticaId,
-        }));
-      if (rows.length) {
-        const { error: e3 } = await db.from('notifications').insert(rows);
-        if (e3) throw e3;
-      }
-    }
-    return data;
+  // Notifica gli utenti taggati (@nome) in una nota
+  async function notifyMentions(userIds, { title, body, praticaId }) {
+    if (!userIds || !userIds.length) return;
+    const rows = userIds.map(uid => ({
+      user_id: uid, type: 'mention', title, body: (body || '').slice(0, 200), pratica_id: praticaId,
+    }));
+    const { error } = await db.from('notifications').insert(rows);
+    if (error) throw error;
   }
 
   // ── NOTIFICATIONS ─────────────────────────────────────── */
@@ -283,11 +314,12 @@ const DB = (() => {
     getReports, getActiveReport, createReport,
     insertPractices, getPractices,
     getAssignments, upsertAssignment, bulkUpsertAssignments, deleteAutoAssignments,
-    getDistinctTipologie,
+    getDistinctTipologie, getDistinctAgenti,
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser,
     getAgentExclusions, addAgentExclusion, deleteAgentExclusion,
-    getPracticeStatuses, getPracticeNotes, addPracticeNote,
+    getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, notifyMentions,
+    isMissingSchema,
     getNotifications, markNotificationRead, markAllNotificationsRead,
     getChatMessages, sendChatMessage,
   };
