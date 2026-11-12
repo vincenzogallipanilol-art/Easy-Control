@@ -1,7 +1,9 @@
 // ================================================================
 // Distribution Engine — adattato da pratiche-distributor v8
-// Filtri stato ora per-collega (colleagueStateFilters), + aggancio
-// pool "Agenti Sally" a un collega (sallyHookColleagueId).
+// Filtri stato per-collega (colleagueStateFilters), aggancio pool
+// "Agenti Sally" a un collega (sallyHookColleagueId), agenti esclusi
+// per singolo collega (colleagues.excluded_agents), pratiche bloccate
+// perche' gia' in lavorazione o in un pool (opts.lockedPids).
 // ================================================================
 const Engine = (() => {
 
@@ -34,12 +36,18 @@ const Engine = (() => {
     return true;
   }
 
+  // L'agente della pratica e' escluso per questo collega?
+  function agentExcludedFor(p, c) {
+    const agent = norm(p.agente_attuale);
+    return !!agent && (c.excluded_agents || []).some(a => norm(a) === agent);
+  }
+
   // Trova il collega migliore per una pratica (tipologia + filtro stato proprio del collega)
   function findColleague(p, colleagues, quotas, rrIdx, filterByColleague) {
     const tip   = norm(p.tipologia);
     const stato = norm(p.stato_attuale);
 
-    const eligibleFor = c => passesFilter(p, (filterByColleague[c.id] || {})[stato]);
+    const eligibleFor = c => !agentExcludedFor(p, c) && passesFilter(p, (filterByColleague[c.id] || {})[stato]);
 
     // Prima passa: primary tipologie
     const primaries = colleagues.filter(c =>
@@ -70,8 +78,13 @@ const Engine = (() => {
     return null;
   }
 
-  function distribute(practices, colleagues, colleagueStateFilters, workingDays, existingManual = [], excludedAgents = [], sallyHookColleagueId = null) {
+  // opts.lockedPids  : Set di pratica_id da non (ri)distribuire
+  // opts.baseQuotas  : { colleagueId: n } carico gia' presente da contare nella quota
+  function distribute(practices, colleagues, colleagueStateFilters, workingDays, existingManual = [], excludedAgents = [], sallyHookColleagueId = null, opts = {}) {
     const filterByColleague = buildFilterByColleague(colleagueStateFilters);
+    const lockedPids = opts.lockedPids || new Set();
+    const baseQuotas = opts.baseQuotas || {};
+    const isLocked   = p => lockedPids.has(p.pratica_id);
 
     const manualPracticeIds = new Set(existingManual.map(a => a.practice_id));
     // Match SOLO su agente_attuale — group_manager/team_manager/area_manager ignorati
@@ -79,13 +92,13 @@ const Engine = (() => {
 
     // Pool "Agenti Sally": tutte le pratiche non-manuali il cui agente_attuale è in lista
     const excludedPractices = excludedSet.size > 0
-      ? practices.filter(p => !manualPracticeIds.has(p.id) && excludedSet.has(norm(p.agente_attuale)))
+      ? practices.filter(p => !manualPracticeIds.has(p.id) && !isLocked(p) && excludedSet.has(norm(p.agente_attuale)))
       : [];
     const excludedIds = new Set(excludedPractices.map(p => p.id));
 
     const activeColleagues = colleagues.filter(c => c.active);
     const quotas = {};
-    for (const c of activeColleagues) quotas[c.id] = 0;
+    for (const c of activeColleagues) quotas[c.id] = baseQuotas[c.id] || 0;
 
     const rrIdx = new Map();
     const autoAssignments = [];
@@ -106,8 +119,8 @@ const Engine = (() => {
       }
     }
 
-    // Pratiche eleggibili alla distribuzione normale: esclude manuali + Agenti Sally
-    const eligible = practices.filter(p => !manualPracticeIds.has(p.id) && !excludedIds.has(p.id));
+    // Pratiche eleggibili alla distribuzione normale: esclude manuali, Agenti Sally e bloccate
+    const eligible = practices.filter(p => !manualPracticeIds.has(p.id) && !excludedIds.has(p.id) && !isLocked(p));
 
     for (const p of eligible) {
       const result = findColleague(p, activeColleagues, quotas, rrIdx, filterByColleague);
@@ -157,7 +170,10 @@ const Engine = (() => {
     const passingFilter = matching.filter(c => passesFilter(p, (filterByColleague[c.id] || {})[stato]));
     if (!passingFilter.length) return 'filtro_stato';
 
-    const allFull = passingFilter.every(c => (quotas[c.id] || 0) >= c.max_quota);
+    const allowed = passingFilter.filter(c => !agentExcludedFor(p, c));
+    if (!allowed.length) return 'agente_escluso';
+
+    const allFull = allowed.every(c => (quotas[c.id] || 0) >= c.max_quota);
     if (allFull) return 'quota_full';
     return 'other';
   }

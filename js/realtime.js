@@ -57,7 +57,7 @@ const Realtime = (() => {
     _channels = [];
   }
 
-  // Canale "di sessione": chat, note, stato pratica, notifiche.
+  // Canale "di sessione": chat, piano di lavoro (stato/nota pratica), conteggi, notifiche.
   // Indipendente dal report attivo — attivo per tutta la durata del login.
   function subscribeGlobal(userId, callbacks = {}) {
     unsubscribeGlobal();
@@ -65,10 +65,10 @@ const Realtime = (() => {
     const sessionCh = db.channel('session-' + userId)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' },
         payload => callbacks.onChatMessage && callbacks.onChatMessage(payload))
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'practice_status' },
-        payload => callbacks.onPracticeStatusChange && callbacks.onPracticeStatusChange(payload))
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'practice_notes' },
-        payload => callbacks.onPracticeNote && callbacks.onPracticeNote(payload))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'practice_work' },
+        payload => callbacks.onWorkChange && callbacks.onWorkChange(payload))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'practice_checks' },
+        payload => callbacks.onChecksChange && callbacks.onChecksChange(payload))
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'notifications' },
         payload => {
           if (payload.new.user_id === userId && callbacks.onNotification) callbacks.onNotification(payload);

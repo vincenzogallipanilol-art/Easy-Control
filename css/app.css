@@ -77,11 +77,18 @@
 }
 
 /* ── TOAST ───────────────────────────────────────────────────── */
-.ec-toast {
+#ec-toasts {
   position: fixed;
   bottom: 1.5rem;
   right: 1.5rem;
   z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: .5rem;
+  pointer-events: none;
+}
+.ec-toast {
   padding: .6rem 1.2rem;
   border-radius: .5rem;
   font-size: .875rem;
@@ -132,22 +139,7 @@
 /* ── Responsive tweaks ───────────────────────────────────────── */
 @media (max-width: 768px) {
   .table-responsive { font-size: .8rem; }
-  .ec-toast { left: 1rem; right: 1rem; bottom: 1rem; }
-}
-
-/* ── STATUS DOT (stato pratica) ───────────────────────────────── */
-.status-dot {
-  display: inline-block;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  box-shadow: 0 0 0 2px rgba(0,0,0,.05) inset;
-}
-.status-dot-empty {
-  background: #dde3ea;
-  border: 1px dashed #b4bdc9;
-  width: 10px;
-  height: 10px;
+  #ec-toasts { left: 1rem; right: 1rem; bottom: 1rem; }
 }
 
 /* ── CHAT (stile WhatsApp: propri a destra, altrui a sinistra) ─── */
@@ -217,8 +209,12 @@
 /* ── BOX NUMERI PER UTENTE (dashboard admin/top) ─────────────────── */
 .ec-user-box {
   cursor: pointer;
+  color: inherit;
+  text-decoration: none;
   transition: box-shadow .15s ease, transform .15s ease;
 }
+.ec-user-box:hover { color: inherit; text-decoration: none; }
+.ec-user-box:focus-visible { outline: 2px solid var(--ec-accent); outline-offset: 2px; }
 .ec-user-box:hover {
   box-shadow: 0 4px 14px rgba(0,0,0,.08);
   transform: translateY(-1px);
@@ -235,8 +231,184 @@
 }
 .ec-checklist .form-check { margin-bottom: .25rem; }
 
-/* ── MODAL NOTA ───────────────────────────────────────────────── */
-#note-thread .avatar-xs {
-  width: 22px; height: 22px; font-size: 10px; font-weight: 600;
-  display: flex; align-items: center; justify-content: center; border-radius: 50%;
+/* ── LARGHEZZA PIENA (il piano di lavoro ha molte colonne) ───────── */
+.ec-wide { padding-left: 1.5rem; padding-right: 1.5rem; }
+@media (max-width: 768px) { .ec-wide { padding-left: .75rem; padding-right: .75rem; } }
+
+/* ── NUMERI (box utente, testata scheda) ─────────────────────────── */
+.ec-box-nums { display: flex; gap: 1.5rem; }
+.ec-box-nums > div { display: flex; flex-direction: column; line-height: 1.15; }
+.ec-box-nums strong { font-size: 1.5rem; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ec-box-nums span { font-size: .75rem; color: #667382; }
+.ec-box-nums--inline { gap: 2rem; flex-wrap: wrap; }
+
+/* ── PALLINO / BADGE STATO DI LAVORAZIONE ────────────────────────── */
+.ec-st-dot {
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  margin-right: .4rem;
+  flex-shrink: 0;
 }
+.ec-st-badge { display: inline-flex; align-items: center; font-size: .8125rem; }
+
+/* ── CHIP (riepilogo + filtro sopra le griglie) ──────────────────── */
+.ec-plan-toolbar { gap: .75rem; flex-wrap: wrap; }
+.ec-chips { display: flex; flex-wrap: wrap; gap: .375rem; }
+.ec-chip {
+  display: inline-flex; align-items: center;
+  padding: .25rem .625rem;
+  border: 1px solid #dce1e7;
+  border-radius: 999px;
+  background: #fff;
+  color: #49566a;
+  font-size: .8125rem;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: background .12s ease, border-color .12s ease;
+}
+.ec-chip strong { margin-left: .375rem; color: #182433; font-variant-numeric: tabular-nums; }
+.ec-chip:hover { background: #f6f8fb; }
+.ec-chip.is-active { background: #e9f0f9; border-color: var(--ec-accent); color: #182433; }
+.ec-chip:focus-visible { outline: 2px solid var(--ec-accent); outline-offset: 1px; }
+.ec-plan-search { width: 240px; }
+
+/* ── GRIGLIA DEL PIANO DI LAVORO ─────────────────────────────────── */
+.ec-grid-wrap {
+  overflow: auto;
+  max-height: calc(100vh - 230px);
+  min-height: 160px;
+}
+.ec-grid-wrap--auto { max-height: 420px; min-height: 0; }
+.ec-grid {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: .8125rem;
+  white-space: nowrap;
+}
+.ec-grid thead th {
+  position: sticky; top: 0; z-index: 3;
+  background: #f6f8fb;
+  color: #667382;
+  font-size: .6875rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .04em;
+  text-align: left;
+  padding: .5rem .625rem;
+  border-bottom: 1px solid #dce1e7;
+}
+.ec-grid td {
+  padding: .3rem .625rem;
+  border-bottom: 1px solid #eef1f5;
+  vertical-align: middle;
+  max-width: 150px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  background: #fff;
+}
+.ec-grid .btn-sm { padding: .2rem .6rem; font-size: .8125rem; }
+.ec-seg .btn { padding: .3rem .75rem; font-size: .8125rem; }
+.ec-grid tbody tr:hover td { background: #f8fafc; }
+
+/* Pratica: prima colonna, fissa a sinistra, colorata con lo stato */
+.ec-grid .ec-col-id {
+  position: sticky; left: 0; z-index: 2;
+  border-left: 4px solid transparent;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ec-grid thead .ec-col-id { z-index: 4; border-left-color: #f6f8fb; }
+.ec-grid .ec-col-id a { color: var(--ec-accent); text-decoration: none; }
+.ec-grid .ec-col-id a:hover { text-decoration: underline; }
+.ec-grid tr.has-st .ec-col-id { border-left-color: var(--st); }
+.ec-grid tr.has-st td.ec-col-id,
+.ec-grid tr.has-st:hover td.ec-col-id { background: color-mix(in srgb, var(--st) 20%, #fff); }
+.ec-grid tr.has-st .ec-col-id a { color: #182433; }
+
+/* Note: testo del report + campo dell'operatore nella riga */
+.ec-grid .ec-col-note { min-width: 260px; max-width: 320px; overflow: visible; }
+.ec-grid .ec-col-wrap { max-width: 320px; }
+.ec-src-note {
+  color: #667382;
+  font-size: .75rem;
+  max-width: 300px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0 .5rem .125rem;
+}
+.ec-note-input {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  font-size: .8125rem;
+  padding: .2rem .5rem;
+  min-height: 0;
+}
+.ec-note-input::placeholder { color: #a5aebb; }
+.ec-grid tr:hover .ec-note-input { border-color: #dce1e7; background: #fff; }
+.ec-note-input:focus { border-color: var(--ec-accent); background: #fff; }
+.ec-grid tr.is-pending .ec-note-input {
+  border-color: #d63939;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(214, 57, 57, .15);
+}
+
+/* Stato: ultima colonna, fissa a destra, menu a tendina */
+.ec-grid .ec-col-status {
+  position: sticky; right: 0; z-index: 2;
+  min-width: 204px;
+  overflow: visible;
+  box-shadow: -6px 0 6px -6px rgba(24, 36, 51, .12);
+}
+.ec-grid thead .ec-col-status { z-index: 4; }
+.ec-status-select, .ec-called-select {
+  font-size: .8125rem;
+  padding-top: .2rem; padding-bottom: .2rem;
+  min-height: 0;
+}
+.ec-called-select { width: 76px; }
+.ec-grid tr.has-st .ec-status-select {
+  border-color: var(--st);
+  border-left-width: 4px;
+  background-color: color-mix(in srgb, var(--st) 12%, #fff);
+  font-weight: 600;
+}
+.ec-grid tr.is-pending .ec-status-select { border-style: dashed; }
+.ec-grid tr.is-called td { color: #8a97a8; }
+.ec-grid tr.ec-row-flash td { animation: ecFlash 2.5s ease; }
+@keyframes ecFlash { 0%, 60% { background: #fff3cd; } 100% { background: #fff; } }
+
+/* ── GRAFICI ─────────────────────────────────────────────────────── */
+.ec-chart-title { font-size: .8125rem; font-weight: 600; color: #49566a; margin-bottom: .25rem; }
+.ec-chart { overflow-x: auto; }
+.ec-chart svg { display: block; }
+.ec-chart-grid { stroke: #eef1f5; stroke-width: 1; }
+.ec-chart-axis { stroke: #c8d0da; stroke-width: 1; }
+.ec-chart-tick { fill: #8a97a8; font-size: 11px; font-variant-numeric: tabular-nums; }
+.ec-chart-label { fill: #49566a; font-size: 11.5px; }
+.ec-chart-value { fill: #182433; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.ec-chart-bar { outline: none; }
+.ec-chart-bar path { transition: opacity .12s ease; }
+.ec-chart-bar:hover path, .ec-chart-bar:focus path { opacity: .78; }
+.ec-chart-bar:hover > rect, .ec-chart-bar:focus > rect { fill: rgba(24, 36, 51, .04); }
+.ec-chart-empty {
+  display: flex; align-items: center; justify-content: center;
+  height: 240px;
+  color: #8a97a8; font-size: .875rem;
+  border: 1px dashed #dce1e7; border-radius: .5rem;
+}
+.ec-chart-tip {
+  position: fixed; z-index: 2000; display: none;
+  pointer-events: none;
+  background: #182433; color: #fff;
+  border-radius: .375rem;
+  padding: .3rem .55rem;
+  font-size: .75rem;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, .2);
+  white-space: nowrap;
+}
+.ec-chart-tip strong { font-size: .875rem; margin-right: .4rem; }
+.ec-chart-tip span { opacity: .8; }
