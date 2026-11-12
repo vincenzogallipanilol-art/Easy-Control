@@ -4,6 +4,8 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"/>
   <title>Easy Control</title>
+  <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
+  <link rel="preconnect" href="https://bnuajmbzacxymwxzexwl.supabase.co" crossorigin/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
   <link rel="stylesheet" href="css/app.css"/>
 </head>
@@ -126,6 +128,12 @@
 
   <!-- ── MAIN ──────────────────────────────────── -->
   <div class="page-wrapper">
+
+    <!-- Banner impersonificazione (solo admin) -->
+    <div id="imp-banner" class="ec-imp-banner d-print-none" style="display:none" role="status">
+      <span>Stai usando l'account di <strong id="imp-target"></strong> — accesso effettuato come <strong id="imp-real"></strong>. Le modifiche sono reali.</span>
+      <button type="button" class="btn btn-sm btn-dark" id="imp-back">Torna al tuo account</button>
+    </div>
 
     <!-- Top header -->
     <div class="page-header d-print-none">
@@ -443,8 +451,6 @@
 <!-- ── SCRIPTS ──────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="js/config.js"></script>
 <script src="js/supabase-client.js"></script>
 <script src="js/auth.js"></script>

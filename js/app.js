@@ -37,6 +37,17 @@
   document.getElementById('user-name-display').textContent = profile.full_name || profile.email;
   document.getElementById('user-role-badge').innerHTML = UI.renderRoleBadge(profile.role);
 
+  // 2a. Impersonificazione (solo admin): banner fisso con ritorno all'account principale
+  if (Auth.isImpersonating()) {
+    const real = Auth.getRealProfile();
+    const bar = document.getElementById('imp-banner');
+    document.getElementById('imp-target').textContent = `${profile.full_name || profile.email} (${profile.role})`;
+    document.getElementById('imp-real').textContent = real.full_name || real.email;
+    bar.style.display = '';
+    document.body.classList.add('is-impersonating');
+    document.getElementById('imp-back').addEventListener('click', () => Auth.stopImpersonating());
+  }
+
   // 2b. Stato applicativo
   let activeReport     = null;
   let practices        = [];
@@ -64,6 +75,20 @@
   const planFilter      = {};  // colleague_id -> { q, st }
   let _poolSearchTerm   = '';
   let _poolShowAll      = false;
+
+  // Librerie pesanti (CSV / Excel): caricate solo quando servono
+  const _libs = {};
+  function loadLib(url, probe) {
+    if (probe()) return Promise.resolve();
+    return _libs[url] || (_libs[url] = new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = url; s.onload = resolve;
+      s.onerror = () => { delete _libs[url]; reject(new Error('Impossibile caricare una libreria esterna')); };
+      document.head.appendChild(s);
+    }));
+  }
+  const needPapa = () => loadLib('https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js', () => window.Papa);
+  const needXlsx = () => loadLib('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js', () => window.XLSX);
 
   const esc  = UI.esc;
   const norm = s => (s || '').toLowerCase().trim();
@@ -226,7 +251,7 @@
     if (dirty) el.addEventListener('blur', () => el.dispatchEvent(new Event('change', { bubbles: true })), { once: true });
   }
   function fullRender() { withFocus(() => renderSection(currentTarget)); }
-  const fullRenderSoon = debounce(fullRender, 120);
+  const fullRenderSoon = debounce(fullRender, 350);
 
   // Aggiorna contatori/pool senza toccare la griglia del piano di lavoro
   function softRender() {
@@ -282,7 +307,7 @@
     try { stats = await DB.getCheckStats(); }
     catch (e) { stats = []; if (!DB.isMissingSchema(e)) console.warn('check_stats', e); }
   }
-  const refreshStatsSoon = debounce(async () => { await loadStats(); softRender(); }, 400);
+  const refreshStatsSoon = debounce(async () => { await loadStats(); softRender(); }, 2000);
 
   async function loadActiveReport() {
     UI.showLoader('Caricamento report…');
@@ -446,6 +471,7 @@
     UI.showLoader('Caricamento CSV…');
     try {
       const text = await file.text();
+      await needPapa();
       const parsed = Papa.parse(text, { header: true, delimiter: ';', skipEmptyLines: true });
       if (!parsed.data.length) throw new Error('File vuoto o formato non valido');
 
@@ -729,6 +755,8 @@
     ['stato_attuale', 'Stato Attuale'], ['conformita_documentazione', 'Conformità'],
     ['originale_archiviato', 'Originale Archiviato'],
   ];
+  const PLAN_PAGE = 150;
+  const planView  = {};  // colleague_id -> { rows, filtered, limit } (righe disegnate a blocchi)
   const dash = '<span class="text-muted">—</span>';
   const cell = v => `<td title="${esc(v)}">${v ? esc(v) : dash}</td>`;
 
@@ -756,7 +784,6 @@
     const { w } = workState(pid);
     const st  = effStatus(pid);
     const def = UI.WORK_STATUSES[st];
-    const search = [pid, p.cognome, p.nome, p.tipologia, p.istituto_finanziario, p.agente_attuale, p.stato_attuale, w?.note].join(' ').toLowerCase();
     const off = pid ? '' : 'disabled';
 
     const cells = PLAN_COLS.map(([key]) => {
@@ -773,7 +800,7 @@
     }).join('');
 
     return `
-      <tr data-pid="${esc(pid)}" data-st="${st}" data-search="${esc(search)}"
+      <tr data-pid="${esc(pid)}" data-st="${st}"
           class="${def ? 'has-st' : ''}${pid in pending ? ' is-pending' : ''}" ${def ? `style="--st:${def.hex}"` : ''}>
         <td class="ec-col-id">${UI.praticaLink(pid)}</td>
         ${cells}
@@ -827,6 +854,7 @@
     const { rows, calls } = planData(colleagueId);
     const f = planFilter[colleagueId] || (planFilter[colleagueId] = { q: '', st: '' });
     const cid = esc(colleagueId);
+    planView[colleagueId] = { rows, filtered: rows, limit: (planView[colleagueId] || {}).limit || PLAN_PAGE };
 
     const grid = rows.length ? `
       <div class="ec-grid-wrap">
@@ -836,7 +864,7 @@
             ${PLAN_COLS.map(([, label]) => `<th>${label}</th>`).join('')}
             <th class="ec-col-status">Stato</th>
           </tr></thead>
-          <tbody>${rows.map(planRowHtml).join('')}</tbody>
+          <tbody></tbody>
         </table>
       </div>
       <div class="card-footer text-muted small d-flex flex-wrap gap-3">
@@ -861,45 +889,95 @@
       <div data-plan-call="${cid}">${callPoolHtml(calls)}</div>`;
   }
 
-  // Chip di riepilogo/filtro sopra la griglia (contati dalle righe a schermo)
+  // Chip di riepilogo/filtro sopra la griglia (contati sui dati, non sul DOM)
   function renderChips(card) {
     const box = card.querySelector('[data-plan-chips]');
-    if (!box) return;
+    const v = planView[card.dataset.plan];
+    if (!box || !v) return;
     const f = planFilter[card.dataset.plan] || { q: '', st: '' };
-    const trs = card.querySelectorAll('.ec-grid tbody tr[data-pid]');
     const counts = { todo: 0 };
-    trs.forEach(tr => { const s = tr.dataset.st || 'todo'; counts[s] = (counts[s] || 0) + 1; });
+    for (const p of v.rows) { const s = effStatus(p.pratica_id || '') || 'todo'; counts[s] = (counts[s] || 0) + 1; }
 
     const chip = (key, label, n, hex) => `
       <button type="button" class="ec-chip ${f.st === key ? 'is-active' : ''}" data-chip="${key}" onclick="App.planChip(this)" aria-pressed="${f.st === key}">
         ${hex ? `<span class="ec-st-dot" style="background:${hex}"></span>` : ''}${label} <strong>${fmt(n)}</strong>
       </button>`;
     box.innerHTML =
-      chip('', 'Tutte', trs.length) +
+      chip('', 'Tutte', v.rows.length) +
       chip('todo', 'Da lavorare', counts.todo) +
       Object.entries(UI.WORK_STATUSES).map(([k, s]) => chip(k, s.short, counts[k] || 0, s.hex)).join('');
   }
 
-  function applyPlanFilter(card) {
-    const f = planFilter[card.dataset.plan] || { q: '', st: '' };
+  // Il piano puo' avere migliaia di righe: se ne disegnano a blocchi (scroll infinito)
+  const planMoreObserver = typeof IntersectionObserver === 'function'
+    ? new IntersectionObserver(entries => {
+        for (const e of entries) if (e.isIntersecting) planMore(e.target.querySelector('button'));
+      }, { rootMargin: '800px' })
+    : null;
+
+  function planMoreRow(left) {
+    return left > 0
+      ? `<tr class="ec-more"><td colspan="${PLAN_COLS.length + 2}">
+           <button type="button" class="btn btn-sm btn-outline-secondary" onclick="App.planMore(this)">Mostra altre ${fmt(Math.min(left, PLAN_PAGE))} di ${fmt(left)}</button>
+         </td></tr>`
+      : '';
+  }
+
+  function filterPlanRows(colleagueId) {
+    const v = planView[colleagueId];
+    const f = planFilter[colleagueId] || { q: '', st: '' };
     const q = f.q.toLowerCase().trim();
-    let shown = 0, total = 0;
-    card.querySelectorAll('.ec-grid tbody tr[data-pid]').forEach(tr => {
-      total++;
-      const okQ  = !q || (tr.dataset.search || '').includes(q);
-      const okSt = !f.st || (f.st === 'todo' ? !tr.dataset.st : tr.dataset.st === f.st);
-      const ok = okQ && okSt;
-      tr.style.display = ok ? '' : 'none';
-      if (ok) shown++;
+    v.filtered = v.rows.filter(p => {
+      const pid = p.pratica_id || '';
+      if (f.st) {
+        const st = effStatus(pid);
+        if (f.st === 'todo' ? st : st !== f.st) return false;
+      }
+      if (!q) return true;
+      const w = workState(pid).w;
+      return [pid, p.cognome, p.nome, p.tipologia, p.istituto_finanziario, p.agente_attuale, p.stato_attuale, w?.note]
+        .join(' ').toLowerCase().includes(q);
     });
+  }
+
+  function renderPlanBody(card) {
+    const cid = card.dataset.plan;
+    const v = planView[cid];
+    const tbody = card.querySelector('.ec-grid tbody');
+    if (!v || !tbody) return;
+    filterPlanRows(cid);
+    const slice = v.filtered.slice(0, v.limit);
+    tbody.innerHTML = slice.map(planRowHtml).join('') + planMoreRow(v.filtered.length - slice.length);
+    const more = tbody.querySelector('.ec-more');
+    if (more && planMoreObserver) planMoreObserver.observe(more);
     const cnt = card.querySelector('[data-plan-count]');
-    if (cnt) cnt.textContent = shown === total ? `${fmt(total)} pratiche` : `${fmt(shown)} di ${fmt(total)} pratiche`;
+    if (cnt) cnt.textContent = v.filtered.length === v.rows.length
+      ? `${fmt(v.rows.length)} pratiche` : `${fmt(v.filtered.length)} di ${fmt(v.rows.length)} pratiche`;
+  }
+
+  function planMore(btn) {
+    const card = btn && btn.closest('[data-plan]');
+    const v = card && planView[card.dataset.plan];
+    const more = btn && btn.closest('tr.ec-more');
+    if (!v || !more) return;
+    if (planMoreObserver) planMoreObserver.unobserve(more);
+    const from = Math.min(v.limit, v.filtered.length);
+    v.limit += PLAN_PAGE;
+    const slice = v.filtered.slice(from, v.limit);
+    more.insertAdjacentHTML('beforebegin', slice.map(planRowHtml).join(''));
+    more.remove();
+    const left = v.filtered.length - from - slice.length;
+    if (left > 0) {
+      const tbody = card.querySelector('.ec-grid tbody');
+      tbody.insertAdjacentHTML('beforeend', planMoreRow(left));
+      if (planMoreObserver) planMoreObserver.observe(tbody.querySelector('.ec-more'));
+    }
   }
 
   function mountPlan(container, colleagueId) {
     container.innerHTML = planHtml(colleagueId);
     const card = container.querySelector('[data-plan]');
-    if (card) { renderChips(card); applyPlanFilter(card); }
+    if (card) { renderChips(card); renderPlanBody(card); }
   }
 
   // Aggiorna chip + pool "Da chiamare" senza ridisegnare la griglia
@@ -927,25 +1005,31 @@
       if (sel) sel.value = st;
       const inp = tr.querySelector('.ec-note-input');
       if (inp && inp !== document.activeElement) inp.value = w?.note || '';
-      const card = tr.closest('[data-plan]');
-      if (card) renderChips(card);
     });
+    document.querySelectorAll('[data-plan]').forEach(renderChips);
   }
 
   function planSearch(input) {
     const card = input.closest('[data-plan]');
     if (!card) return;
     (planFilter[card.dataset.plan] || (planFilter[card.dataset.plan] = { q: '', st: '' })).q = input.value;
-    applyPlanFilter(card);
+    planFilterSoon(card);
   }
+  const planFilterSoon = debounce(card => {
+    const v = planView[card.dataset.plan];
+    if (v) v.limit = PLAN_PAGE;
+    withFocus(() => renderPlanBody(card));
+  }, 180);
   function planChip(btn) {
     const card = btn.closest('[data-plan]');
     if (!card) return;
     const key = btn.dataset.chip || '';
     const f = planFilter[card.dataset.plan] || (planFilter[card.dataset.plan] = { q: '', st: '' });
     f.st = f.st === key ? '' : key;
+    const v = planView[card.dataset.plan];
+    if (v) v.limit = PLAN_PAGE;
     renderChips(card);
-    applyPlanFilter(card);
+    renderPlanBody(card);
   }
 
   // ── Salvataggio stato / nota (inline, senza popup) ─────────────────
@@ -998,7 +1082,7 @@
     if (!low.includes('@')) return [];
     const out = [];
     for (const u of users) {
-      if (u.id === session.user.id || u.status === 'pending') continue;
+      if (u.id === profile.id || u.status === 'pending') continue;
       const first = (u.full_name || u.email || '').trim().split(/[\s@.]+/)[0].toLowerCase();
       if (first.length < 2) continue;
       const tag = '@' + first;
@@ -1089,7 +1173,10 @@
     const assigned = Object.values(assignments).filter(a => a.colleague_id === c.id).length;
     const checked  = statsSum('n_day', ownerKey)[c.id] || 0;
     const color = UI.colleagueColor(c.color_idx);
-    const linked = users.filter(u => u.colleague_id === c.id).map(u => u.full_name || u.email);
+    const linkedUsers = users.filter(u => u.colleague_id === c.id);
+    const linked = linkedUsers.map(u => u.full_name || u.email);
+    const impTarget = Auth.getRealProfile()?.role === 'admin' && !Auth.isImpersonating()
+      ? linkedUsers.find(u => u.id !== profile.id && u.status !== 'pending') : null;
     const num = (v, label) => `<div><strong>${fmt(v)}</strong><span>${label}</span></div>`;
     return `
       <div class="d-flex flex-wrap align-items-center gap-3 mb-3">
@@ -1101,6 +1188,7 @@
           <h2 class="mb-0">Piano di lavoro — ${esc(c.name)}</h2>
           <div class="text-muted small">${linked.length ? esc(linked.join(', ')) : 'Nessun utente collegato'}</div>
         </div>
+        ${impTarget ? `<button type="button" class="btn btn-outline-warning" onclick="App.impersonate('${esc(impTarget.id)}')">${svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>', 18)}<span class="ms-1">Impersonifica</span></button>` : ''}
         <div class="ec-box-nums ec-box-nums--inline ms-auto">
           ${num(assigned, 'Assegnate')}${num(rows.length, 'Nel piano')}${num(checked, 'Controllate oggi')}${num(calls.length, 'Da chiamare')}
         </div>
@@ -1315,7 +1403,7 @@
   // ── 14. Export Excel ───────────────────────────────────────────────
   $('btn-export')?.addEventListener('click', exportExcel);
 
-  function exportExcel() {
+  async function exportExcel() {
     if (!activeReport || !practices.length) {
       UI.toast('Nessun dato da esportare', 'warning'); return;
     }
@@ -1338,6 +1426,7 @@
         'Nota operatore':  (open && w.note) || '',
       };
     });
+    await needXlsx();
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(rows), 'Distribuzione');
 
@@ -1461,17 +1550,17 @@
 
   // Funzioni richiamate dagli handler inline
   window.App = window.AppRuntime = {
-    setStatus, saveNote, planSearch, planChip,
+    setStatus, saveNote, planSearch, planChip, planMore,
     setCalled, setPoolNote, closePoolRow,
     openScheda, backToDashboard, setPeriod, setMgmtTab,
     assignFromPool, filterPool, showAllPool,
     sendChat, openNotification,
+    impersonate: id => Auth.impersonate(id),
   };
 
   // Start (la prima navigazione avviene qui: tutte le funzioni di render sono definite)
   navigateFromHash();
-  await loadActiveReport();
-  await loadGlobalData();
+  await Promise.all([loadActiveReport(), loadGlobalData()]);
   subscribeGlobalRealtime();
   scheduleCutoff();
 

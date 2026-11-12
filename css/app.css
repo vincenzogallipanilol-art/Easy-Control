@@ -412,3 +412,12 @@
 }
 .ec-chart-tip strong { font-size: .875rem; margin-right: .4rem; }
 .ec-chart-tip span { opacity: .8; }
+
+
+/* ── Impersonificazione ─────────────────────────── */
+.ec-imp-banner {
+  position: sticky; top: 0; z-index: 1030;
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: .75rem;
+  padding: .5rem 1rem; background: #f59f00; color: #1d273b; font-size: .875rem;
+}
+body.is-impersonating .ec-sidebar { box-shadow: inset 3px 0 0 #f59f00; }

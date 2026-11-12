@@ -4,16 +4,26 @@
 const DB = (() => {
 
   // Legge tutte le righe di una query a pagine (PostgREST limita ogni risposta)
-  async function fetchAll(build, page = 1000) {
-    let all = [], from = 0;
+  // La prima pagina da sola (report piccoli = 1 richiesta); se e' piena,
+  // le successive partono a gruppi in parallelo invece che una dopo l'altra.
+  async function fetchAll(build, page = 1000, parallel = 4) {
+    const first = await build().range(0, page - 1);
+    if (first.error) throw first.error;
+    const all = first.data.slice();
+    if (first.data.length < page) return all;
+    let from = page;
     while (true) {
-      const { data, error } = await build().range(from, from + page - 1);
-      if (error) throw error;
-      all = all.concat(data);
-      if (data.length < page) break;
-      from += page;
+      const res = await Promise.all(Array.from({ length: parallel }, (_, i) =>
+        build().range(from + i * page, from + (i + 1) * page - 1)));
+      let last = false;
+      for (const { data, error } of res) {
+        if (error) throw error;
+        for (const r of data) all.push(r);
+        if (data.length < page) { last = true; break; }
+      }
+      if (last) return all;
+      from += parallel * page;
     }
-    return all;
   }
 
   // Tabella/colonna/funzione non ancora creata (migration SQL non eseguita)?
@@ -109,7 +119,7 @@ const DB = (() => {
     }
   }
   async function getPractices(reportId) {
-    return fetchAll(() => db.from('practices').select('*').eq('report_id', reportId));
+    return fetchAll(() => db.from('practices').select('*').eq('report_id', reportId).order('id'));
   }
 
   // ── ASSIGNMENTS ───────────────────────────────────── */
@@ -153,10 +163,17 @@ const DB = (() => {
   }
 
   // ── VALORI DISTINTI dal report attivo (per il modal collega) ──────
+  // Valori distinti per tipologia/agente: un solo scarico per report, poi in cache
+  let _distinctCache = null; // { reportId, promise }
   async function getDistinct(column) {
     const report = await getActiveReport();
     if (!report) return [];
-    const rows = await fetchAll(() => db.from('practices').select(column).eq('report_id', report.id));
+    if (!_distinctCache || _distinctCache.reportId !== report.id) {
+      const promise = fetchAll(() => db.from('practices').select('tipologia,agente_attuale').eq('report_id', report.id).order('id'))
+        .catch(e => { _distinctCache = null; throw e; });
+      _distinctCache = { reportId: report.id, promise };
+    }
+    const rows = await _distinctCache.promise;
     const set = new Set();
     for (const r of rows) {
       const t = (r[column] || '').trim();
