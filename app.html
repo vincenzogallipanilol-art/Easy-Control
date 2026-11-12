@@ -66,13 +66,23 @@
             </a>
           </li>
 
-          <!-- Le mie pratiche -->
+          <!-- Pool Audit / xFlat / Help (Admin + Top) -->
+          <li class="nav-item" data-elevated-only>
+            <a class="nav-link" href="#" data-nav="gestione" title="Audit · xFlat · Help">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
+              </span>
+              <span class="nav-link-title ec-sidebar-label">Audit · xFlat · Help</span>
+            </a>
+          </li>
+
+          <!-- Piano di lavoro -->
           <li class="nav-item">
-            <a class="nav-link" href="#" data-nav="mine" title="Le mie pratiche">
+            <a class="nav-link" href="#" data-nav="mine" title="Piano di lavoro">
               <span class="nav-link-icon d-md-none d-lg-inline-block">
                 <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/></svg>
               </span>
-              <span class="nav-link-title ec-sidebar-label">Le mie pratiche</span>
+              <span class="nav-link-title ec-sidebar-label">Piano di lavoro</span>
             </a>
           </li>
 
@@ -119,7 +129,7 @@
 
     <!-- Top header -->
     <div class="page-header d-print-none">
-      <div class="container-xl">
+      <div class="container-fluid ec-wide">
         <div class="row g-2 align-items-center">
           <div class="col">
             <div class="d-flex align-items-center gap-2">
@@ -167,7 +177,7 @@
 
     <!-- ── SECTIONS ────────────────────────────── -->
     <div class="page-body">
-      <div class="container-xl">
+      <div class="container-fluid ec-wide">
 
         <!-- Dashboard -->
         <div data-section="dashboard" data-elevated-only>
@@ -189,7 +199,22 @@
           </div>
         </div>
 
-        <!-- Le mie pratiche -->
+        <!-- Pool Audit / xFlat / Help (Admin + Top) -->
+        <div data-section="gestione" data-elevated-only style="display:none">
+          <div id="gestione-content">
+            <div class="text-center py-5 text-muted">
+              <div class="spinner-border text-primary mb-3" role="status"></div>
+              <p>Caricamento…</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Scheda collega: il suo piano di lavoro a pagina intera (Admin + Top) -->
+        <div data-section="scheda" data-elevated-only style="display:none">
+          <div id="scheda-content"></div>
+        </div>
+
+        <!-- Piano di lavoro personale -->
         <div data-section="mine" style="display:none">
           <div id="mine-content">
             <div class="text-center py-5 text-muted">
@@ -260,7 +285,7 @@
             <div class="card-header">
               <h3 class="card-title">Agenti Sally</h3>
               <div class="card-options">
-                <small class="text-muted">Le pratiche di questi agenti formano una pool separata, agganciabile a un collega</small>
+                <small class="text-muted">Esclusione generale: le pratiche di questi agenti formano una pool separata, agganciabile a un collega. Le esclusioni per singolo collega si impostano nella sua scheda.</small>
               </div>
             </div>
             <div class="card-body">
@@ -394,65 +419,22 @@
             <tbody id="col-filters-tbody"></tbody>
           </table>
         </div>
+
+        <hr/>
+        <label class="form-label mb-1">Agenti esclusi per questo collega</label>
+        <div class="mb-2"><small class="text-muted">Le pratiche di questi agenti non vengono mai assegnate a questo collega; restano assegnabili agli altri.</small></div>
+        <div id="col-excluded-agents" class="mb-2"></div>
+        <div class="input-group" style="max-width:420px">
+          <input type="text" id="col-excluded-agent-input" class="form-control" list="col-agents-datalist" placeholder="Nome agente" autocomplete="off"
+            onkeydown="if(event.key==='Enter'){event.preventDefault();Admin.addModalExcludedAgent();}"/>
+          <datalist id="col-agents-datalist"></datalist>
+          <button type="button" class="btn btn-outline-secondary" onclick="Admin.addModalExcludedAgent()">Aggiungi</button>
+        </div>
       </div>
       <div class="modal-footer">
         <button type="button" class="btn btn-ghost-danger me-auto" id="btn-delete-colleague" onclick="Admin.deleteColleague()" style="display:none">Elimina</button>
         <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Annulla</button>
         <button type="button" class="btn btn-primary" onclick="Admin.saveColleague()">Salva</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── MODAL SCHEDA COLLEGA (click su un box "Numeri per utente") ─ -->
-<div class="modal modal-blur fade" id="modal-scheda" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title" id="scheda-title">Scheda collega</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <div id="scheda-content"></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Chiudi</button>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ── MODAL NOTA / STATO PRATICA ────────────────────── -->
-<div class="modal modal-blur fade" id="modal-note" tabindex="-1">
-  <div class="modal-dialog modal-lg modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header">
-        <h5 class="modal-title">Pratica <span id="note-pratica-id" class="text-muted"></span></h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <input type="hidden" id="note-pratica-id-input"/>
-
-        <!-- Thread note esistenti -->
-        <div id="note-thread" class="mb-3" style="max-height:260px;overflow-y:auto"></div>
-
-        <hr/>
-
-        <!-- Stato -->
-        <label class="form-label">Stato</label>
-        <div id="note-status-picker" class="d-flex flex-wrap gap-2 mb-3"></div>
-
-        <!-- Testo nota -->
-        <label class="form-label">Nota <small id="note-required-hint" class="text-danger" style="display:none">(obbligatoria per questo stato)</small></label>
-        <textarea id="note-body" class="form-control mb-3" rows="3" placeholder="Descrivi il problema…"></textarea>
-
-        <!-- Tag colleghi -->
-        <label class="form-label">Tagga qualcuno <small class="text-muted">(riceverà una notifica)</small></label>
-        <div id="note-mentions-list" class="d-flex flex-wrap gap-3 mb-2"></div>
-      </div>
-      <div class="modal-footer">
-        <button type="button" class="btn btn-ghost-secondary" data-bs-dismiss="modal">Annulla</button>
-        <button type="button" class="btn btn-primary" onclick="App.submitNote()">Invia</button>
       </div>
     </div>
   </div>
