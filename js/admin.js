@@ -10,12 +10,14 @@ const Admin = (() => {
   let _config          = {};
   let _canonicalStates = [];   // lista nomi stato (da state_filters, solo come elenco)
   let _tipologieList   = [];   // distinct tipologie dalle pratiche
+  let _agentiList      = [];   // distinct agenti dalle pratiche (suggerimenti)
 
   // Stato del modal collega aperto al momento
   let _modalColleagueId = null;
   let _modalPrimary     = new Set();
   let _modalSecondary   = new Set();
   let _modalFilters     = {}; // stato -> { included, note_mode, conf_mode }
+  let _modalExcluded    = [];  // agenti esclusi per questo collega
 
   // ── INIT ──────────────────────────────── */
   async function init() {
@@ -48,6 +50,7 @@ const Admin = (() => {
           <div class="d-flex align-items-center gap-2">
             <span class="avatar avatar-sm bg-${UI.colleagueColor(c.color_idx)}-lt">${c.name[0]}</span>
             <strong>${c.name}</strong>
+            ${(c.excluded_agents || []).length ? `<span class="badge bg-danger-lt text-danger" title="Agenti esclusi: ${UI.esc(c.excluded_agents.join(', '))}">${c.excluded_agents.length} agenti esclusi</span>` : ''}
           </div>
         </td>
         <td><span class="badge ${c.active ? 'bg-success-lt text-success' : 'bg-secondary-lt'}">${c.active ? 'Attivo' : 'Disattivo'}</span></td>
@@ -65,6 +68,7 @@ const Admin = (() => {
     _modalColleagueId = id || null;
     _modalPrimary   = new Set(c?.primary_tipologie || []);
     _modalSecondary = new Set(c?.secondary_tipologie || []);
+    _modalExcluded  = [...(c?.excluded_agents || [])];
 
     modal.querySelector('[name=col-id]').value       = c?.id || '';
     modal.querySelector('[name=col-name]').value     = c?.name || '';
@@ -98,6 +102,14 @@ const Admin = (() => {
       } catch(e) { /* non bloccante */ }
     }
     renderModalFilters();
+
+    // Agenti esclusi per questo collega (+ suggerimenti dagli agenti del report attivo)
+    renderModalExcluded();
+    if (!_agentiList.length) {
+      try { _agentiList = await DB.getDistinctAgenti(); } catch(e) { /* non bloccante */ }
+    }
+    const dl = document.getElementById('col-agents-datalist');
+    if (dl) dl.innerHTML = _agentiList.map(a => `<option value="${UI.esc(a)}"></option>`).join('');
 
     const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
     bsModal.show();
@@ -169,6 +181,36 @@ const Admin = (() => {
     renderModalFilters();
   }
 
+  // ── Agenti esclusi per il singolo collega ─────────────────────── */
+  function renderModalExcluded() {
+    const el = document.getElementById('col-excluded-agents');
+    if (!el) return;
+    if (!_modalExcluded.length) {
+      el.innerHTML = '<span class="text-muted small">Nessun agente escluso</span>';
+      return;
+    }
+    el.innerHTML = _modalExcluded.map((a, i) => `
+      <span class="badge bg-danger-lt text-danger me-1 mb-1">
+        ${UI.esc(a)}
+        <a href="#" class="ms-1 text-danger" title="Rimuovi" onclick="Admin.removeModalExcludedAgent(${i});return false;">×</a>
+      </span>`).join('');
+  }
+
+  function addModalExcludedAgent() {
+    const inp = document.getElementById('col-excluded-agent-input');
+    const name = (inp?.value || '').trim();
+    if (!name) return;
+    if (!_modalExcluded.some(a => a.toLowerCase() === name.toLowerCase())) _modalExcluded.push(name);
+    inp.value = '';
+    renderModalExcluded();
+    inp.focus();
+  }
+
+  function removeModalExcludedAgent(idx) {
+    _modalExcluded.splice(idx, 1);
+    renderModalExcluded();
+  }
+
   async function saveColleague() {
     const modal = document.getElementById('modal-colleague');
     const id   = modal.querySelector('[name=col-id]').value.trim();
@@ -185,11 +227,12 @@ const Admin = (() => {
       color_idx:           parseInt(modal.querySelector('[name=col-color]').value) || 0,
       primary_tipologie:   Array.from(_modalPrimary),
       secondary_tipologie: Array.from(_modalSecondary),
+      excluded_agents:     [..._modalExcluded],
       sort_order:          parseInt(modal.querySelector('[name=col-sort]').value) || 0,
     };
 
     try {
-      await DB.upsertColleague(col);
+      const res = await DB.upsertColleague(col);
       const filterRows = _canonicalStates.map(stato => {
         const f = _modalFilters[stato] || { included: true, note_mode: 'empty', conf_mode: 'empty' };
         return { stato, included: f.included, note_mode: f.note_mode, conf_mode: f.conf_mode };
@@ -199,7 +242,11 @@ const Admin = (() => {
       bootstrap.Modal.getOrCreateInstance(modal).hide();
       _colleagues = await DB.getColleagues();
       renderColleagues();
-      UI.toast('Collega salvato', 'success');
+      if (res && res.partial && _modalExcluded.length) {
+        UI.toast('Collega salvato, ma gli agenti esclusi richiedono la migration SQL del piano di lavoro', 'warning');
+      } else {
+        UI.toast('Collega salvato', 'success');
+      }
     } catch(e) {
       UI.toast('Errore: ' + e.message, 'danger');
     }
@@ -408,6 +455,7 @@ const Admin = (() => {
     init,
     openColleagueModal, saveColleague, deleteColleague,
     toggleModalTipologia, toggleModalFilterIncluded, cycleModalFilterMode,
+    addModalExcludedAgent, removeModalExcludedAgent,
     saveWorkingDays, renderWorkingDays,
     setSallyHook,
     setUserRole, setUserColleague, approveUser, rejectUser,
