@@ -373,7 +373,7 @@
     if (workRows) Cache.set(ck('work', rid), workRows);
   }
 
-  async function loadActiveReport({ fresh = false } = {}) {
+  async function loadActiveReport({ fresh = false, preloaded = null } = {}) {
     UI.showLoader('Caricamento report…');
     try {
       [activeReport, colleagues, colleagueStateFilters, config, agentExclusions] = await Promise.all([
@@ -406,7 +406,7 @@
           background = () => refreshLive(rid);
         } else {
           const [pr, assignList] = await Promise.all([
-            practicesOk ? cP : DB.getPractices(rid),
+            practicesOk ? cP : (preloaded || DB.getPractices(rid)),
             DB.getAssignments(rid),
             loadWork(),
           ]);
@@ -560,6 +560,13 @@
     await uploadReport(file);
   });
 
+  // Pratiche escluse dal report all'import (stati che non richiedono controllo)
+  const EXCLUDED_STATES = ['provvigioni liquidabili', 'declinat', 'rinunciat', 'annullat', 'preparazione kit affida', 'anagrafica caricata'];
+  const isExcludedState = st => {
+    const n = String(st || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+    return EXCLUDED_STATES.some(x => n.includes(x));
+  };
+
   async function uploadReport(file) {
     UI.showLoader('Caricamento CSV…');
     try {
@@ -591,25 +598,41 @@
         return o;
       }).filter(o => o.pratica_id);
       if (!rows.length) throw new Error('Nessuna riga con ID pratica valorizzato nella colonna "' + idCol + '"');
+      const total = rows.length;
+      const kept = rows.filter(o => !isExcludedState(o.stato_attuale));
+      const excluded = total - kept.length;
+      if (!kept.length) throw new Error('Tutte le pratiche del file sono in stati esclusi: nessuna da caricare');
+      rows.length = 0; rows.push(...kept);
+      // ID generati qui: dopo l'inserimento non serve riscaricare le pratiche
+      const localIds = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function';
+      if (localIds) rows.forEach(r => { r.id = crypto.randomUUID(); });
 
       const report = await DB.createReport(file.name, rows.length);
       rows.forEach(r => { r.report_id = report.id; });
 
       UI.showLoader(`Inserimento ${rows.length} pratiche…`);
-      await DB.insertPractices(rows);
+      await DB.insertPractices(rows, (n, tot) => UI.showLoader(`Inserimento pratiche… ${fmt(n)} / ${fmt(tot)}`));
 
       // Auto-distribuisci subito (saltando le pratiche gia' lavorate o nei pool)
       UI.showLoader('Distribuzione automatica…');
-      await loadActiveReport({ fresh: true });
+      await loadActiveReport({ fresh: true, preloaded: localIds ? rows : null });
 
       const { autoAssignments } = runEngine([]);
       if (autoAssignments.length) {
+        UI.showLoader(`Salvataggio assegnazioni… ${fmt(autoAssignments.length)}`);
         const { data: { user } } = await db.auth.getUser();
-        await DB.bulkUpsertAssignments(autoAssignments.map(a => ({ ...a, assigned_by: user.id })));
+        const saved = autoAssignments.map(a => ({ ...a, assigned_by: user.id }));
+        await DB.bulkUpsertAssignments(saved);
+        if (localIds) {
+          setAssignments(saved);
+          Cache.set(ck('assign', activeReport.id), saved);
+          fullRender();
+        } else {
+          await loadActiveReport({ fresh: true });
+        }
       }
 
-      UI.toast(`Report caricato: ${rows.length} pratiche, ${autoAssignments.length} assegnate`, 'success');
-      await loadActiveReport({ fresh: true });
+      UI.toast(`Report caricato: ${fmt(rows.length)} pratiche${excluded ? ` (${fmt(excluded)} escluse per stato)` : ''}, ${fmt(autoAssignments.length)} assegnate`, 'success');
     } catch (e) {
       UI.toast('Errore upload: ' + e.message, 'danger');
     } finally {

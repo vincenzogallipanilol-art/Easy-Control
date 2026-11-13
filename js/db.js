@@ -135,13 +135,22 @@ const DB = (() => {
   }
 
   // ── PRACTICES ────────────────────────────────────── */
-  async function insertPractices(practices) {
-    // Batch insert in chunks of 1000
-    const CHUNK = 1000;
-    for (let i = 0; i < practices.length; i += CHUNK) {
-      const { error } = await db.from('practices').insert(practices.slice(i, i + CHUNK));
+  // Esegue fn su blocchi di una lista, con piu' richieste in parallelo
+  async function inChunks(items, size, concurrency, fn) {
+    const chunks = [];
+    for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+    let next = 0;
+    const worker = async () => { while (next < chunks.length) await fn(chunks[next++]); };
+    await Promise.all(Array.from({ length: Math.min(concurrency, chunks.length) }, worker));
+  }
+  async function insertPractices(practices, onProgress) {
+    let done = 0;
+    await inChunks(practices, 1000, 4, async part => {
+      const { error } = await db.from('practices').insert(part);
       if (error) throw error;
-    }
+      done += part.length;
+      if (onProgress) onProgress(done, practices.length);
+    });
   }
   async function getPractices(reportId) {
     return fetchAll(() => db.from('practices').select('*').eq('report_id', reportId));
@@ -157,12 +166,10 @@ const DB = (() => {
     if (error) throw error;
   }
   async function bulkUpsertAssignments(assignments) {
-    const CHUNK = 500;
-    for (let i = 0; i < assignments.length; i += CHUNK) {
-      const { error } = await db.from('assignments')
-        .upsert(assignments.slice(i, i + CHUNK), { onConflict: 'practice_id' });
+    await inChunks(assignments, 1000, 4, async part => {
+      const { error } = await db.from('assignments').upsert(part, { onConflict: 'practice_id' });
       if (error) throw error;
-    }
+    });
   }
   async function deleteAutoAssignments(reportId) {
     const { error } = await db.from('assignments')
