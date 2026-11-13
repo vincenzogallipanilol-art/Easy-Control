@@ -3,27 +3,52 @@
 // ================================================================
 const DB = (() => {
 
-  // Legge tutte le righe di una query a pagine (PostgREST limita ogni risposta)
-  // La prima pagina da sola (report piccoli = 1 richiesta); se e' piena,
-  // le successive partono a gruppi in parallelo invece che una dopo l'altra.
-  async function fetchAll(build, page = 1000, parallel = 4) {
-    const first = await build().range(0, page - 1);
-    if (first.error) throw first.error;
-    const all = first.data.slice();
-    if (first.data.length < page) return all;
-    let from = page;
+  // ── LETTURA A PAGINE ────────────────────────────────────────────
+  // Paginazione "keyset" (WHERE chiave > ultima): ogni pagina costa quanto se stessa.
+  // L'OFFSET invece rilegge e rivaluta le regole RLS di tutte le righe saltate:
+  // con migliaia di righe il tempo cresce col quadrato del numero di pagine.
+  const PAGE = 1000;
+
+  async function pageBy(build, key, { gt = null, gte = null, lt = null } = {}) {
+    let q = build().order(key).limit(PAGE);
+    if (gt != null)  q = q.gt(key, gt);
+    if (gte != null) q = q.gte(key, gte);
+    if (lt != null)  q = q.lt(key, lt);
+    const { data, error } = await q;
+    if (error) throw error;
+    return data;
+  }
+
+  // Sequenziale su una chiave ordinabile (unica)
+  async function fetchKeyset(build, key, bounds = {}) {
+    const out = [];
+    let cur = { ...bounds };
     while (true) {
-      const res = await Promise.all(Array.from({ length: parallel }, (_, i) =>
-        build().range(from + i * page, from + (i + 1) * page - 1)));
-      let last = false;
-      for (const { data, error } of res) {
-        if (error) throw error;
-        for (const r of data) all.push(r);
-        if (data.length < page) { last = true; break; }
-      }
-      if (last) return all;
-      from += parallel * page;
+      const data = await pageBy(build, key, cur);
+      for (const r of data) out.push(r);
+      if (data.length < PAGE) return out;
+      cur = { gt: data[data.length - 1][key], lt: bounds.lt ?? null };
     }
+  }
+
+  // Chiave UUID (distribuita in modo uniforme): dopo la prima pagina il resto
+  // viene letto in parallelo, un intervallo di prefissi per volta.
+  const UUID_BUCKETS = 8;
+  const uuidBound = i => i >= UUID_BUCKETS ? null : (i * (16 / UUID_BUCKETS)).toString(16) + '0000000-0000-0000-0000-000000000000';
+
+  async function fetchAll(build, key = 'id') {
+    const first = await pageBy(build, key);
+    if (first.length < PAGE) return first;
+    const last = first[first.length - 1][key];
+    const jobs = [];
+    for (let i = 0; i < UUID_BUCKETS; i++) {
+      const lo = uuidBound(i), hi = uuidBound(i + 1);
+      if (hi && hi <= last) continue;                       // gia' tutto nella prima pagina
+      jobs.push(fetchKeyset(build, key, lo <= last ? { gt: last, lt: hi } : { gte: lo, lt: hi }));
+    }
+    const out = first.slice();
+    for (const part of await Promise.all(jobs)) for (const r of part) out.push(r);
+    return out;
   }
 
   // Tabella/colonna/funzione non ancora creata (migration SQL non eseguita)?
@@ -119,12 +144,12 @@ const DB = (() => {
     }
   }
   async function getPractices(reportId) {
-    return fetchAll(() => db.from('practices').select('*').eq('report_id', reportId).order('id'));
+    return fetchAll(() => db.from('practices').select('*').eq('report_id', reportId));
   }
 
   // ── ASSIGNMENTS ───────────────────────────────────── */
   async function getAssignments(reportId) {
-    return fetchAll(() => db.from('assignments').select('*').eq('report_id', reportId).order('id'));
+    return fetchAll(() => db.from('assignments').select('*').eq('report_id', reportId));
   }
   async function upsertAssignment(assignment) {
     const { error } = await db.from('assignments')
@@ -169,7 +194,7 @@ const DB = (() => {
     const report = await getActiveReport();
     if (!report) return [];
     if (!_distinctCache || _distinctCache.reportId !== report.id) {
-      const promise = fetchAll(() => db.from('practices').select('tipologia,agente_attuale').eq('report_id', report.id).order('id'))
+      const promise = fetchAll(() => db.from('practices').select('id,tipologia,agente_attuale').eq('report_id', report.id))
         .catch(e => { _distinctCache = null; throw e; });
       _distinctCache = { reportId: report.id, promise };
     }
@@ -240,8 +265,8 @@ const DB = (() => {
       `set_at.gte.${sinceIso}`,
     ];
     if (reportId) parts.push(`report_id.eq.${reportId}`);
-    return fetchAll(() => db.from('practice_work').select('*')
-      .is('closed_at', null).or(parts.join(',')).order('pratica_id'));
+    return fetchKeyset(() => db.from('practice_work').select('*')
+      .is('closed_at', null).or(parts.join(',')), 'pratica_id');
   }
 
   // Imposta stato + nota. Ritorna la riga aggiornata, o null se rimossa.

@@ -267,6 +267,7 @@
 
   // 4. Logout
   $('btn-logout')?.addEventListener('click', async () => {
+    await Cache.clear();
     await Auth.signOut();
     window.location.href = 'index.html';
   });
@@ -296,10 +297,12 @@
       const rows = await DB.getOpenWork(activeReport?.id || null, since);
       work = {};
       for (const r of rows) work[r.pratica_id] = r;
+      return rows;
     } catch (e) {
       work = {};
       if (DB.isMissingSchema(e)) showSchemaBanner();
       else UI.toast('Errore caricamento stati: ' + e.message, 'danger');
+      return null;
     }
   }
 
@@ -309,7 +312,35 @@
   }
   const refreshStatsSoon = debounce(async () => { await loadStats(); softRender(); }, 2000);
 
-  async function loadActiveReport() {
+  // Tempi di caricamento (console.table con ?perf=1 nell'indirizzo)
+  const _t0 = performance.now(), _marks = [];
+  const mark = label => _marks.push([label, Math.round(performance.now() - _t0)]);
+  window.__perf = _marks;
+  mark('avvio app');
+
+  // Cache locale: l'ambito dei dati e' dato dall'utente REALE (le regole RLS sono le sue)
+  const cacheUid  = (Auth.getRealProfile() || profile).id;
+  const seesAllDb = ['admin', 'top'].includes((Auth.getRealProfile() || profile).role);
+  const ck = (kind, rid) => `${kind}:${cacheUid}:${rid}`;
+
+  function setAssignments(list) {
+    assignments = {};
+    for (const a of list) assignments[a.practice_id] = a;
+  }
+
+  // Assegnazioni + stati correnti: cambiano spesso, quindi si rileggono sempre
+  async function refreshLive(rid) {
+    const [assignList, workRows] = await Promise.all([DB.getAssignments(rid), loadWork()]);
+    mark('dati aggiornati');
+    if (!activeReport || activeReport.id !== rid) return;
+    setAssignments(assignList);
+    indexPractices();
+    fullRenderSoon();
+    Cache.set(ck('assign', rid), assignList);
+    if (workRows) Cache.set(ck('work', rid), workRows);
+  }
+
+  async function loadActiveReport({ fresh = false } = {}) {
     UI.showLoader('Caricamento report…');
     try {
       [activeReport, colleagues, colleagueStateFilters, config, agentExclusions] = await Promise.all([
@@ -319,16 +350,40 @@
         DB.getConfig(),
         DB.getAgentExclusions(),
       ]);
+      mark('report e configurazione');
 
+      let background = null;
       if (activeReport) {
-        const [pr, assignList] = await Promise.all([
-          DB.getPractices(activeReport.id),
-          DB.getAssignments(activeReport.id),
-          loadWork(),
+        const rid = activeReport.id;
+        const [cP, cA, cW] = await Promise.all([
+          Cache.get(ck('practices', rid)),
+          fresh ? null : Cache.get(ck('assign', rid)),
+          fresh ? null : Cache.get(ck('work', rid)),
         ]);
-        practices = pr;
-        assignments = {};
-        for (const a of assignList) assignments[a.practice_id] = a;
+        // Le pratiche di un report non cambiano mai: la cache vale se e' completa
+        const practicesOk = seesAllDb && Array.isArray(cP) && activeReport.row_count && cP.length === activeReport.row_count;
+        mark(practicesOk ? 'cache pratiche' : 'nessuna cache pratiche');
+
+        if (practicesOk && Array.isArray(cA) && Array.isArray(cW)) {
+          // Caricamento da cache: la pagina e' usabile subito, i dati vivi arrivano in background
+          practices = cP;
+          setAssignments(cA);
+          work = {};
+          for (const r of cW) work[r.pratica_id] = r;
+          background = () => refreshLive(rid);
+        } else {
+          const [pr, assignList] = await Promise.all([
+            practicesOk ? cP : DB.getPractices(rid),
+            DB.getAssignments(rid),
+            loadWork(),
+          ]);
+          practices = pr;
+          setAssignments(assignList);
+          mark('dati scaricati');
+          if (seesAllDb && !practicesOk) Cache.set(ck('practices', rid), pr).then(() => Cache.dropOthers(rid));
+          Cache.set(ck('assign', rid), assignList);
+          Cache.set(ck('work', rid), Object.values(work));
+        }
       } else {
         practices = []; assignments = {};
         await loadWork();
@@ -336,11 +391,14 @@
       indexPractices();
       dataLoaded = true;
       fullRender();
+      mark('pagina visibile');
       subscribeRealtime();
+      if (background) background().catch(e => console.warn('aggiornamento in background', e));
     } catch (e) {
       UI.toast('Errore caricamento: ' + e.message, 'danger');
     } finally {
       UI.hideLoader();
+      if (/[?&]perf\b/.test(location.search)) console.table(_marks.map(([k, ms]) => ({ fase: k, ms })));
     }
   }
 
@@ -417,7 +475,7 @@
       onNewReport(newReport) {
         if (newReport.id !== activeReport?.id) {
           UI.toast('Nuovo report caricato — aggiorno…', 'info');
-          setTimeout(loadActiveReport, 1000);
+          setTimeout(() => loadActiveReport({ fresh: true }), 1000);
         }
       },
       onColleaguesChange()       { DB.getColleagues().then(d => { colleagues = d; fullRenderSoon(); }); },
@@ -450,7 +508,7 @@
       if (rows.length) await DB.bulkUpsertAssignments(rows);
 
       UI.toast(`Ricalcolo completato: ${autoAssignments.length} assegnazioni`, 'success');
-      await loadActiveReport();
+      await loadActiveReport({ fresh: true });
     } catch (e) {
       UI.toast('Errore ricalcolo: ' + e.message, 'danger');
     } finally {
@@ -500,7 +558,7 @@
 
       // Auto-distribuisci subito (saltando le pratiche gia' lavorate o nei pool)
       UI.showLoader('Distribuzione automatica…');
-      await loadActiveReport();
+      await loadActiveReport({ fresh: true });
 
       const { autoAssignments } = runEngine([]);
       if (autoAssignments.length) {
@@ -509,7 +567,7 @@
       }
 
       UI.toast(`Report caricato: ${rows.length} pratiche, ${autoAssignments.length} assegnate`, 'success');
-      await loadActiveReport();
+      await loadActiveReport({ fresh: true });
     } catch (e) {
       UI.toast('Errore upload: ' + e.message, 'danger');
     } finally {
