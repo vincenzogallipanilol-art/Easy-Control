@@ -522,3 +522,10 @@ body.is-impersonating .ec-sidebar { box-shadow: inset 3px 0 0 #f59f00; }
 .ec-tip-row strong { margin-left: auto; padding-left: .75rem; font-size: .8rem; }
 .ec-tip-sw { width: 10px; height: 10px; border-radius: 3px; flex-shrink: 0; }
 .ec-grid { font-family: Inter, -apple-system, 'Segoe UI', sans-serif; }
+.ec-kpi--link { text-decoration: none; color: inherit; cursor: pointer; transition: transform .12s ease, box-shadow .12s ease; }
+.ec-kpi--link:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(52, 44, 130, .16); color: inherit; }
+.ec-kpi--link:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+.ec-pool-filters { display: flex; flex-wrap: wrap; align-items: center; gap: .6rem; padding: .85rem 1.4rem; border-bottom: 1px solid #eceef7; }
+.ec-pool-filters .form-select, .ec-pool-filters .form-control { width: auto; min-width: 150px; max-width: 240px; }
+.ec-pool-filters label { display: flex; align-items: center; gap: .4rem; margin: 0; font-size: .8rem; color: var(--ec-muted); font-weight: 500; }
+.ec-readonly .ec-note-input, .ec-readonly .ec-status-select { pointer-events: none; opacity: .65; }

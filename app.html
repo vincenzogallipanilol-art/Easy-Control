@@ -53,7 +53,7 @@
         <ul class="navbar-nav pt-lg-3">
 
           <!-- Dashboard -->
-          <li class="nav-item" data-elevated-only>
+          <li class="nav-item">
             <a class="nav-link" href="#" data-nav="dashboard" title="Dashboard">
               <span class="nav-link-icon d-md-none d-lg-inline-block">
                 <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -64,21 +64,11 @@
 
           <!-- Pool -->
           <li class="nav-item" data-elevated-only>
-            <a class="nav-link" href="#" data-nav="pool" title="Pool">
+            <a class="nav-link" href="#" data-nav="pool" title="Pool: da assegnare, da chiamare, audit, xFlat, help">
               <span class="nav-link-icon d-md-none d-lg-inline-block">
                 <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               </span>
               <span class="nav-link-title ec-sidebar-label">Pool</span>
-            </a>
-          </li>
-
-          <!-- Pool Audit / xFlat / Help (Admin + Top) -->
-          <li class="nav-item" data-elevated-only>
-            <a class="nav-link" href="#" data-nav="gestione" title="Audit · xFlat · Help">
-              <span class="nav-link-icon d-md-none d-lg-inline-block">
-                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/></svg>
-              </span>
-              <span class="nav-link-title ec-sidebar-label">Audit · xFlat · Help</span>
             </a>
           </li>
 
@@ -195,7 +185,7 @@
       <div class="container-fluid ec-wide">
 
         <!-- Dashboard -->
-        <div data-section="dashboard" data-elevated-only>
+        <div data-section="dashboard">
           <div id="dashboard-content">
             <div class="text-center py-5 text-muted">
               <div class="spinner-border text-primary mb-3" role="status"></div>
@@ -207,16 +197,6 @@
         <!-- Pool -->
         <div data-section="pool" data-elevated-only style="display:none">
           <div id="pool-content">
-            <div class="text-center py-5 text-muted">
-              <div class="spinner-border text-primary mb-3" role="status"></div>
-              <p>Caricamento…</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Pool Audit / xFlat / Help (Admin + Top) -->
-        <div data-section="gestione" data-elevated-only style="display:none">
-          <div id="gestione-content">
             <div class="text-center py-5 text-muted">
               <div class="spinner-border text-primary mb-3" role="status"></div>
               <p>Caricamento…</p>

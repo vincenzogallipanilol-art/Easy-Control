@@ -62,15 +62,16 @@ const UI = (() => {
   }
 
   // ── KPI TILE ───────────────────────────── */
-  function kpiTile(label, value, icon, color = 'blue', sub = '') {
-    return `
-      <div class="ec-kpi ec-kpi--${color}">
+  function kpiTile(label, value, icon, color = 'blue', sub = '', go = '') {
+    const inner = `
         <div class="ec-kpi-top">
           <span class="ec-kpi-icon">${icon}</span>
           <span class="ec-kpi-value">${value}</span>
         </div>
-        <div class="ec-kpi-label">${label}${sub ? ` <span class="ec-kpi-sub">· ${sub}</span>` : ''}</div>
-      </div>`;
+        <div class="ec-kpi-label">${label}${sub ? ` <span class="ec-kpi-sub">· ${sub}</span>` : ''}</div>`;
+    return go
+      ? `<a href="#" class="ec-kpi ec-kpi--${color} ec-kpi--link" onclick="${go};return false;">${inner}</a>`
+      : `<div class="ec-kpi ec-kpi--${color}">${inner}</div>`;
   }
 
   // ── STATO BADGE ─────────────────────────── */

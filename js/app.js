@@ -75,9 +75,9 @@
   let series            = null;   // righe check_series(): null = migration non eseguita
   let seriesDays        = 7;
   let seriesMode        = 'user'; // 'user' | 'status'
-  let mgmtTab           = 'audit';
+  let poolTab           = 'assign';   // assign | da_chiamare | audit | xflat | help
+  const poolFilter      = { q: '', st: '', tip: '', ag: '' };
   const planFilter      = {};  // colleague_id -> { q, st }
-  let _poolSearchTerm   = '';
   let _poolShowAll      = false;
 
   // Librerie pesanti (CSV / Excel): caricate solo quando servono
@@ -183,24 +183,30 @@
   const manualAssignments = () => Object.values(assignments).filter(a => a.is_manual);
 
   // ── 3. Navigazione SPA ─────────────────────────────────────────────
-  const ELEVATED_TARGETS = ['dashboard', 'pool', 'gestione', 'scheda'];
+  const ELEVATED_TARGETS = ['pool', 'scheda'];
   const ADMIN_TARGETS    = ['admin'];
-  const ALL_TARGETS      = [...ELEVATED_TARGETS, ...ADMIN_TARGETS, 'mine', 'chat'];
+  const ALL_TARGETS      = [...ELEVATED_TARGETS, ...ADMIN_TARGETS, 'dashboard', 'mine', 'chat'];
   function isTargetAllowed(target) {
     if (ADMIN_TARGETS.includes(target))    return isAdmin;
     if (ELEVATED_TARGETS.includes(target)) return canSeeAll;
-    return true; // mine, chat
+    return true; // dashboard, mine, chat
   }
-  const defaultTarget = () => (canSeeAll ? 'dashboard' : 'mine');
+  const defaultTarget = () => 'dashboard';
 
   const navLinks = document.querySelectorAll('[data-nav]');
   const sections = document.querySelectorAll('[data-section]');
 
+  const POOL_TABS = ['assign', 'da_chiamare', 'audit', 'xflat', 'help'];
   function navigate(target, arg, push = false) {
+    if (target === 'gestione') { target = 'pool'; arg = arg || 'audit'; }   // vecchi link
     if (!ALL_TARGETS.includes(target) || !isTargetAllowed(target)) target = defaultTarget();
     if (target === 'scheda') {
       if (arg) schedaColleagueId = arg;
       if (!schedaColleagueId) target = 'dashboard';
+    }
+    if (target === 'pool' && arg && POOL_TABS.includes(arg) && arg !== poolTab) {
+      poolTab = arg; _poolShowAll = false;
+      Object.assign(poolFilter, { q: '', st: '', tip: '', ag: '' });
     }
     currentTarget = target;
     updateHeader(target);
@@ -210,7 +216,7 @@
     sections.forEach(s => {
       s.style.display = (isTargetAllowed(s.dataset.section) && s.dataset.section === target) ? '' : 'none';
     });
-    const hash = '#' + target + (target === 'scheda' ? ':' + encodeURIComponent(schedaColleagueId) : '');
+    const hash = '#' + target + (target === 'scheda' ? ':' + encodeURIComponent(schedaColleagueId) : target === 'pool' ? ':' + poolTab : '');
     if (push) history.pushState(null, '', hash); else history.replaceState(null, '', hash);
 
     if (target === 'admin') Admin.init();
@@ -232,14 +238,14 @@
 
   // Intestazione: saluto + sottotitolo della pagina
   const SUBTITLES = {
-    dashboard: 'Pratiche controllate e carico di lavoro in tempo reale',
-    pool:      'Pratiche non ancora assegnate a nessun collega',
-    gestione:  'Audit, xFlat e Help in attesa di gestione',
+    dashboard: isElevatedView() ? 'Pratiche controllate e carico di lavoro in tempo reale' : 'Il tuo carico di lavoro e le tue pratiche controllate',
+    pool:      'Da assegnare, da chiamare, audit, xFlat e help',
     scheda:    'Piano di lavoro del collega',
     mine:      'Il tuo piano di lavoro di oggi',
     chat:      'Scrivi al team e tagga i colleghi',
     admin:     'Utenti, colleghi e regole di distribuzione',
   };
+  function isElevatedView() { return canSeeAll; }
   function updateHeader(target) {
     const h = Number(romeParts(new Date()).hour);
     const hello = h < 13 ? 'Buongiorno' : h < 18 ? 'Buon pomeriggio' : 'Buonasera';
@@ -253,7 +259,6 @@
   function renderSection(target) {
     if (target === 'dashboard') renderDashboard();
     else if (target === 'pool') renderPool();
-    else if (target === 'gestione') renderMgmt();
     else if (target === 'mine') renderMine();
     else if (target === 'scheda') renderScheda();
   }
@@ -283,7 +288,6 @@
     withFocus(() => {
       if (currentTarget === 'dashboard') renderDashboard();
       else if (currentTarget === 'pool') renderPool();
-      else if (currentTarget === 'gestione') renderMgmt();
       else if (currentTarget === 'mine') renderPlanExtras(myColleagueId);
       else if (currentTarget === 'scheda') { renderSchedaHead(); renderPlanExtras(schedaColleagueId); }
     });
@@ -447,6 +451,7 @@
 
       renderNotifBell();
       if (currentTarget === 'chat') { renderChat(); scrollChatToBottom(); }
+      else if (currentTarget === 'scheda') fullRender();
       else softRender();
     } catch (e) {
       UI.toast('Errore caricamento dati: ' + e.message, 'danger');
@@ -563,25 +568,32 @@
       const parsed = Papa.parse(text, { header: true, delimiter: ';', skipEmptyLines: true });
       if (!parsed.data.length) throw new Error('File vuoto o formato non valido');
 
-      const report = await DB.createReport(file.name, parsed.data.length);
+      const heads = parsed.meta.fields || Object.keys(parsed.data[0] || {});
+      const normH = h => String(h || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+      const colOf = (...names) => {
+        const wanted = names.map(normH);
+        return heads.find(h => wanted.includes(normH(h))) || null;
+      };
+      const idCol = colOf('Numero pratica', 'Pratica ID', 'ID pratica', 'Id Pratica', 'pratica_id', 'Numero', 'N pratica', 'N. pratica', 'Codice pratica', 'Pratica', 'ID')
+        || heads.find(h => /prat/.test(normH(h)) && !/fea|stato|tipolog/.test(normH(h))) || null;
+      if (!idCol) throw new Error('Nel CSV non trovo la colonna con l\'ID pratica (es. "Numero pratica"). Colonne trovate: ' + heads.join(', '));
+      const cols = {
+        cognome: colOf('Cognome'), nome: colOf('Nome'), note: colOf('Note'), tipologia: colOf('Tipologia'),
+        istituto_finanziario: colOf('Istituto finanziario'), agente_attuale: colOf('Agente attuale'),
+        area_manager: colOf('Area Manager'), group_manager: colOf('Group Manager'), team_manager: colOf('Team Manager'),
+        stato_attuale: colOf('Stato Attuale'), conformita_documentazione: colOf('Conformità Documentazione', 'Conformita Documentazione', 'Conformità'),
+        originale_archiviato: colOf('Originale Archiviato'), pratica_fea: colOf('Pratica FEA'),
+      };
+      const val = (r, c) => (c && r[c] != null ? String(r[c]).trim() : '');
+      const rows = parsed.data.map(r => {
+        const o = { pratica_id: val(r, idCol) };
+        for (const [k, c] of Object.entries(cols)) o[k] = val(r, c);
+        return o;
+      }).filter(o => o.pratica_id);
+      if (!rows.length) throw new Error('Nessuna riga con ID pratica valorizzato nella colonna "' + idCol + '"');
 
-      const rows = parsed.data.map(r => ({
-        report_id:                report.id,
-        pratica_id:               r['Numero pratica'] || r['pratica_id'] || '',
-        cognome:                  r['Cognome'] || r['cognome'] || '',
-        nome:                     r['Nome'] || r['nome'] || '',
-        note:                     r['Note'] || r['note'] || '',
-        tipologia:                r['Tipologia'] || r['tipologia'] || '',
-        istituto_finanziario:     r['Istituto finanziario'] || r['istituto_finanziario'] || '',
-        agente_attuale:           r['Agente attuale'] || r['agente_attuale'] || '',
-        area_manager:             r['Area Manager'] || r['area_manager'] || '',
-        group_manager:            r['Group Manager'] || r['group_manager'] || '',
-        team_manager:             r['Team Manager'] || r['team_manager'] || '',
-        stato_attuale:            r['Stato Attuale'] || r['stato_attuale'] || '',
-        conformita_documentazione:r['Conformità Documentazione'] || r['conformita_documentazione'] || '',
-        originale_archiviato:     r['Originale Archiviato'] || r['originale_archiviato'] || '',
-        pratica_fea:              r['Pratica FEA'] || r['pratica_fea'] || '',
-      }));
+      const report = await DB.createReport(file.name, rows.length);
+      rows.forEach(r => { r.report_id = report.id; });
 
       UI.showLoader(`Inserimento ${rows.length} pratiche…`);
       await DB.insertPractices(rows);
@@ -663,6 +675,7 @@
     const el = $('dashboard-content');
     if (!el) return;
     if (!dataLoaded) { el.innerHTML = spinner; return; }
+    if (!canSeeAll) { renderMyDashboard(el); return; }
 
     let top = '';
     if (!activeReport) {
@@ -678,19 +691,27 @@
         <div class="ec-kpis mb-3">
           ${UI.kpiTile('Pratiche totali',   fmt(practices.length),   iconDoc(),   'blue')}
           ${UI.kpiTile('Assegnate',         fmt(assignedCount),      iconCheck(), 'green')}
-          ${UI.kpiTile('In Pool',           fmt(regularPool.length), iconPool(),  'orange')}
+          ${UI.kpiTile('In Pool',           fmt(regularPool.length), iconPool(),  'orange', '', "App.goPool('assign')")}
           ${UI.kpiTile('Controllate oggi',  fmt(checkedToday),       iconEye(),   'teal')}
           ${kpi.sallyHooked ? UI.kpiTile('Agenti Sally (agganciati)', fmt(kpi.sallyHooked), iconExcl(), 'cyan') : ''}
-          ${sallyPool.length ? UI.kpiTile('Agenti Sally (pool)', fmt(sallyPool.length), iconExcl(), 'red') : ''}
+          ${sallyPool.length ? UI.kpiTile('Agenti Sally (pool)', fmt(sallyPool.length), iconExcl(), 'red', '', "App.goPool('assign')") : ''}
           ${UI.kpiTile('Giorni lavorativi', config.working_days || 1, iconCal(),  'purple')}
         </div>`;
     }
 
     const pc = poolCounts();
     const poolTile = (key, label, icon, color) =>
-      UI.kpiTile(label, fmt(pc[key].pool), icon, color, pc[key].today ? `+${fmt(pc[key].today)} alle 19` : '');
+      UI.kpiTile(label, fmt(pc[key].pool), icon, color, pc[key].today ? `+${fmt(pc[key].today)} alle 19` : '', `App.goPool('${key}')`);
+
+    const noId = activeReport ? practices.reduce((n, p) => n + (p.pratica_id ? 0 : 1), 0) : 0;
+    const noIdAlert = noId ? `
+      <div class="alert alert-warning mb-3" role="alert">
+        <strong>${fmt(noId)} pratiche senza ID pratica</strong>: senza ID non c'è il link alla pratica e non si possono salvare stato e nota.
+        ${isAdmin ? 'Ricarica il CSV (colonna "Numero pratica" o "Pratica ID") con "Carica report".' : 'Chiedi a un admin di ricaricare il report.'}
+      </div>` : '';
 
     el.innerHTML = `
+      ${noIdAlert}
       ${top}
       <div class="ec-kpis mb-4">
         ${poolTile('da_chiamare', 'Pool Da chiamare', iconPhone(), 'orange')}
@@ -714,6 +735,46 @@
     UI.mountLineCharts(el);
   }
 
+  // Dashboard di un utente semplice: solo i propri numeri
+  function renderMyDashboard(el) {
+    const per = PERIODS[statsPeriod];
+    let kpis = '';
+    if (!myColleagueId) {
+      kpis = UI.emptyState(svg('<path d="M16 7a4 4 0 1 1-8 0 4 4 0 0 1 8 0z"/><path d="M6 21v-2a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v2"/>', 40),
+        'Il tuo account non è collegato a nessun collega. Contatta un admin per il collegamento.');
+    } else if (!activeReport) {
+      kpis = UI.emptyState(svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>', 40), 'Nessun report attivo. Contatta un admin.');
+    } else {
+      const { rows, calls } = planData(myColleagueId);
+      const todo = rows.filter(p => !effStatus(p.pratica_id || '')).length;
+      const checked = stats.reduce((n, r) => n + Number(r[per.field] || 0), 0);
+      kpis = `
+        <div class="ec-kpis mb-4">
+          ${UI.kpiTile('Nel mio piano',   fmt(rows.length), iconDoc(),   'blue',   '', "App.goMine()")}
+          ${UI.kpiTile('Da lavorare',     fmt(todo),        iconPool(),  'orange', '', "App.goMine()")}
+          ${UI.kpiTile(`Controllate ${per.text}`, fmt(checked), iconEye(), 'teal')}
+          ${UI.kpiTile('Da chiamare',     fmt(calls.length), iconPhone(), 'purple', '', "App.goMine()")}
+        </div>`;
+    }
+    el.innerHTML = `
+      ${kpis}
+      ${chartsHtml()}
+      <div class="ec-section-head mt-4 mb-3">
+        <h3 class="mb-0">${svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>', 22)} I miei numeri</h3>
+        <div class="btn-group ec-seg" role="group" aria-label="Periodo">
+          ${Object.entries(PERIODS).map(([k, p]) => `
+            <button type="button" class="btn ${k === statsPeriod ? 'btn-primary' : ''}" onclick="App.setPeriod('${k}')">${p.label}</button>`).join('')}
+        </div>
+      </div>
+      ${colleagueBoxesHtml()}`;
+    UI.mountLineCharts(el);
+  }
+  const goMine = () => navigate('mine', null, true);
+  const goPool = tab => navigate('pool', tab, true);
+
+  // Colleghi visibili in dashboard: tutti per Admin/Top, solo il proprio per un utente semplice
+  const visibleColleagues = () => colleagues.filter(c => c.active && (canSeeAll || c.id === myColleagueId));
+
   // Ultimi N giorni (data italiana), ancorati al giorno di oggi a Roma
   function lastDays(n) {
     const p = romeParts(new Date());
@@ -736,7 +797,7 @@
       for (const [k, st] of Object.entries(UI.WORK_STATUSES)) get(k, st.short, st.hex);
       for (const r of series) { const i = idx[r.check_day]; if (i !== undefined && map.has(r.status)) map.get(r.status).values[i] += Number(r.n || 0); }
     } else {
-      colleagues.filter(c => c.active).forEach(c => get(c.id, c.name, UI.colleagueHex(c.color_idx)));
+      visibleColleagues().forEach(c => get(c.id, c.name, UI.colleagueHex(c.color_idx)));
       const extra = ['#6b7280', '#0ea5a4', '#b45309', '#7c3aed'];
       for (const r of series) {
         const i = idx[r.check_day];
@@ -845,7 +906,7 @@
     const per = PERIODS[statsPeriod];
     const checkedToday = statsSum(per.field, ownerKey);
 
-    const active = colleagues.filter(c => c.active);
+    const active = visibleColleagues();
     if (!active.length) return '<div class="text-muted small">Nessun collega attivo.</div>';
 
     return `
@@ -856,7 +917,7 @@
           const color = UI.colleagueColor(c.color_idx);
           return `
           <div class="col-sm-6 col-lg-4 col-xxl-3">
-            <a class="card ec-user-box h-100" href="#scheda:${encodeURIComponent(c.id)}" data-colleague="${esc(c.id)}"
+            <a class="card ec-user-box h-100" href="${c.id === myColleagueId && !canSeeAll ? '#mine' : '#scheda:' + encodeURIComponent(c.id)}" data-colleague="${esc(c.id)}"
               onclick="App.openScheda(this.dataset.colleague);return false;">
               <div class="card-body">
                 <div class="d-flex align-items-center gap-2 mb-3">
@@ -931,6 +992,16 @@
   const dash = '<span class="text-muted">—</span>';
   const cell = v => `<td title="${esc(v)}">${v ? esc(v) : dash}</td>`;
 
+  // Chi puo' modificare il piano di un collega: Admin tutti; Top se stesso e gli utenti semplici;
+  // un utente semplice solo il proprio.
+  function canEditColleague(colleagueId) {
+    if (isAdmin) return true;
+    if (colleagueId && colleagueId === myColleagueId) return true;
+    if (!canSeeAll) return false;
+    const owners = users.filter(u => u.colleague_id === colleagueId && u.status !== 'pending');
+    return owners.every(u => u.role === 'user' || u.id === profile.id);
+  }
+
   function planData(colleagueId) {
     const rows = [];
     for (const p of practices) {
@@ -950,12 +1021,12 @@
       .map(([k, s]) => `<option value="${k}" ${k === st ? 'selected' : ''}>${s.label}</option>`).join('');
   }
 
-  function planRowHtml(p) {
+  function planRowHtml(p, ro) {
     const pid = p.pratica_id || '';
     const { w } = workState(pid);
     const st  = effStatus(pid);
     const def = UI.WORK_STATUSES[st];
-    const off = pid ? '' : 'disabled';
+    const off = (pid && !ro) ? '' : 'disabled';
 
     const cells = PLAN_COLS.map(([key]) => {
       if (key === '__note') return `
@@ -982,8 +1053,9 @@
       </tr>`;
   }
 
-  function callPoolHtml(calls) {
+  function callPoolHtml(calls, colleagueId) {
     if (!calls.length) return '';
+    const ro = colleagueId && !canEditColleague(colleagueId) ? 'disabled' : '';
     return `
       <div class="card mt-4">
         <div class="card-header">
@@ -1004,7 +1076,7 @@
                   ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
                   <td>
                     <select class="form-select form-select-sm ec-called-select" data-fkey="called:${esc(w.pratica_id)}"
-                      aria-label="Chiamato" onchange="App.setCalled(this)">
+                      aria-label="Chiamato" onchange="App.setCalled(this)" ${ro}>
                       <option value="0" ${w.called ? '' : 'selected'}>No</option>
                       <option value="1" ${w.called ? 'selected' : ''}>Sì</option>
                     </select>
@@ -1012,7 +1084,7 @@
                   <td class="ec-col-note">
                     <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
                       value="${esc(w.pool_note || '')}" placeholder="Esito della chiamata…" maxlength="1000" autocomplete="off"
-                      aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
+                      aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()" ${ro}/>
                   </td>
                 </tr>`).join('')}
             </tbody>
@@ -1027,7 +1099,9 @@
     const cid = esc(colleagueId);
     planView[colleagueId] = { rows, filtered: rows, limit: (planView[colleagueId] || {}).limit || PLAN_PAGE };
 
+    const noId = rows.reduce((n, p) => n + (p.pratica_id ? 0 : 1), 0);
     const grid = rows.length ? `
+      ${noId ? `<div class="alert alert-warning m-3" role="alert">${fmt(noId)} pratiche senza ID pratica: stato e nota non sono modificabili. Chiedi a un admin di ricaricare il report.</div>` : ''}
       <div class="ec-grid-wrap">
         <table class="ec-grid" data-colleague="${cid}">
           <thead><tr>
@@ -1040,7 +1114,7 @@
       </div>
       <div class="card-footer text-muted small d-flex flex-wrap gap-3">
         <span data-plan-count></span>
-        <span class="ms-auto">Alle 19 le pratiche con uno stato lasciano il piano: Conforme e Integrazioni vengono archiviate, le altre passano ai rispettivi pool.</span>
+        <span class="ms-auto">Alle 19 le pratiche con uno stato lasciano il piano: Conforme e Richiesta integrazioni vengono eliminate dall'elenco e conteggiate nei rispettivi numeri; le altre passano ai rispettivi pool.</span>
       </div>`
       : UI.emptyState(svg('<polyline points="20 6 9 17 4 12"/>', 40),
           activeReport ? 'Nessuna pratica da lavorare nel piano' : 'Nessun report attivo');
@@ -1057,7 +1131,7 @@
         </div>
         ${grid}
       </div>
-      <div data-plan-call="${cid}">${callPoolHtml(calls)}</div>`;
+      <div data-plan-call="${cid}">${callPoolHtml(calls, colleagueId)}</div>`;
   }
 
   // Chip di riepilogo/filtro sopra la griglia (contati sui dati, non sul DOM)
@@ -1118,7 +1192,8 @@
     if (!v || !tbody) return;
     filterPlanRows(cid);
     const slice = v.filtered.slice(0, v.limit);
-    tbody.innerHTML = slice.map(planRowHtml).join('') + planMoreRow(v.filtered.length - slice.length);
+    const ro = !canEditColleague(cid);
+    tbody.innerHTML = slice.map(p => planRowHtml(p, ro)).join('') + planMoreRow(v.filtered.length - slice.length);
     const more = tbody.querySelector('.ec-more');
     if (more && planMoreObserver) planMoreObserver.observe(more);
     const cnt = card.querySelector('[data-plan-count]');
@@ -1135,7 +1210,8 @@
     const from = Math.min(v.limit, v.filtered.length);
     v.limit += PLAN_PAGE;
     const slice = v.filtered.slice(from, v.limit);
-    more.insertAdjacentHTML('beforebegin', slice.map(planRowHtml).join(''));
+    const ro = !canEditColleague(card.dataset.plan);
+    more.insertAdjacentHTML('beforebegin', slice.map(p => planRowHtml(p, ro)).join(''));
     more.remove();
     const left = v.filtered.length - from - slice.length;
     if (left > 0) {
@@ -1158,7 +1234,7 @@
       if (card.dataset.plan === colleagueId) renderChips(card);
     });
     document.querySelectorAll('[data-plan-call]').forEach(box => {
-      if (box.dataset.planCall === colleagueId) box.innerHTML = callPoolHtml(planData(colleagueId).calls);
+      if (box.dataset.planCall === colleagueId) box.innerHTML = callPoolHtml(planData(colleagueId).calls, colleagueId);
     });
   }
 
@@ -1357,7 +1433,7 @@
         <span class="avatar bg-${color}-lt">${esc(c.name[0] || '?')}</span>
         <div>
           <h2 class="mb-0">Piano di lavoro — ${esc(c.name)}</h2>
-          <div class="text-muted small">${linked.length ? esc(linked.join(', ')) : 'Nessun utente collegato'}</div>
+          <div class="text-muted small">${linked.length ? esc(linked.join(', ')) : 'Nessun utente collegato'}${canEditColleague(c.id) ? '' : ' · <span class="badge bg-secondary-lt">Sola lettura</span>'}</div>
         </div>
         ${impTarget ? `<button type="button" class="btn btn-outline-warning" onclick="App.impersonate('${esc(impTarget.id)}')">${svg('<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><polyline points="16 11 18 13 22 9"/>', 18)}<span class="ms-1">Impersonifica</span></button>` : ''}
         <div class="ec-box-nums ec-box-nums--inline ms-auto">
@@ -1382,72 +1458,11 @@
     mountPlan(el.querySelector('[data-scheda-plan]'), c.id);
   }
 
-  function openScheda(colleagueId) { navigate('scheda', colleagueId, true); }
+  function openScheda(colleagueId) {
+    if (!canSeeAll) { if (colleagueId === myColleagueId) navigate('mine', null, true); return; }
+    navigate('scheda', colleagueId, true);
+  }
   function backToDashboard()       { navigate('dashboard', null, true); }
-
-  // ── 12. POOL AUDIT / XFLAT / HELP (Top e Admin) ────────────────────
-  function mgmtRows(status) {
-    return Object.values(work)
-      .filter(w => w.status === status && workState(w.pratica_id).phase === 'mgmt')
-      .sort((a, b) => new Date(a.set_at) - new Date(b.set_at));
-  }
-
-  function renderMgmt() {
-    const el = $('gestione-content');
-    if (!el) return;
-    if (!dataLoaded) { el.innerHTML = spinner; return; }
-
-    const lists = {};
-    for (const k of UI.MGMT_STATUSES) lists[k] = mgmtRows(k);
-    const rows = lists[mgmtTab] || [];
-    const colName = id => colleagues.find(c => c.id === id)?.name || '';
-
-    el.innerHTML = `
-      <div class="card">
-        <div class="card-header ec-plan-toolbar">
-          <div class="ec-chips">
-            ${UI.MGMT_STATUSES.map(k => `
-              <button type="button" class="ec-chip ${k === mgmtTab ? 'is-active' : ''}" onclick="App.setMgmtTab('${k}')" aria-pressed="${k === mgmtTab}">
-                <span class="ec-st-dot" style="background:${UI.WORK_STATUSES[k].hex}"></span>${UI.WORK_STATUSES[k].label} <strong>${fmt(lists[k].length)}</strong>
-              </button>`).join('')}
-          </div>
-          <small class="text-muted ms-auto">Le pratiche arrivano qui alle 19 del giorno in cui vengono segnalate</small>
-        </div>
-        ${rows.length ? `
-        <div class="ec-grid-wrap">
-          <table class="ec-grid ec-grid--pool">
-            <thead><tr>
-              <th>Pratica</th><th>Cognome</th><th>Nome</th><th>Note</th><th>Tipologia</th><th>Istituto Finanziario</th>
-              <th>Agente Attuale</th><th>Operatore</th><th>Segnalata</th><th>Note gestione</th><th></th>
-            </tr></thead>
-            <tbody>
-              ${rows.map(w => `
-                <tr data-pid="${esc(w.pratica_id)}">
-                  <td class="ec-col-id">${UI.praticaLink(w.pratica_id)}</td>
-                  ${cell(w.cognome)}${cell(w.nome)}
-                  <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
-                  ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
-                  ${cell(colName(w.colleague_id) || userName(w.set_by))}
-                  <td>${new Date(w.set_at).toLocaleDateString('it-IT')}</td>
-                  <td class="ec-col-note">
-                    <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
-                      value="${esc(w.pool_note || '')}" placeholder="Esito / azioni…" maxlength="1000" autocomplete="off"
-                      aria-label="Note gestione" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
-                  </td>
-                  <td><button type="button" class="btn btn-sm btn-outline-secondary" onclick="App.closePoolRow(this)">Chiudi</button></td>
-                </tr>`).join('')}
-            </tbody>
-          </table>
-        </div>`
-        : UI.emptyState(svg('<polyline points="20 6 9 17 4 12"/>', 40), `Nessuna pratica nel pool ${UI.WORK_STATUSES[mgmtTab].label}`)}
-      </div>`;
-  }
-
-  function setMgmtTab(k) {
-    if (!UI.MGMT_STATUSES.includes(k)) return;
-    mgmtTab = k;
-    renderMgmt();
-  }
 
   // ── 13. POOL (pratiche non assegnate) ──────────────────────────────
   const REASON_LABELS = {
@@ -1458,86 +1473,213 @@
     other:              'Altro',
   };
 
+  const POOL_LABELS = { assign: 'Da assegnare', da_chiamare: 'Da chiamare', audit: 'Audit', xflat: 'xFlat', help: 'Help' };
+  const poolHex = k => (UI.WORK_STATUSES[k] || {}).hex || '#206bc4';
+
+  function mgmtRows(status) {
+    return Object.values(work)
+      .filter(w => w.status === status && workState(w.pratica_id).phase === (status === 'da_chiamare' ? 'call' : 'mgmt'))
+      .sort((a, b) => new Date(a.set_at) - new Date(b.set_at));
+  }
+  const colName = id => colleagues.find(c => c.id === id)?.name || '';
+
+  // Righe di una scheda del pool, in forma uniforme per filtri e tabelle
+  function poolItems(tab) {
+    if (tab === 'assign') {
+      const { unassigned, regularPool, sallyPool } = poolSplit();
+      const sallyIds = new Set(sallyPool.map(p => p.id));
+      const { poolPractices } = runEngine(manualAssignments());
+      const reason = {};
+      for (const p of poolPractices) reason[p.id] = p._reason;
+      return unassigned.map(p => ({
+        pid: p.pratica_id, p, sally: sallyIds.has(p.id), reason: reason[p.id],
+        cognome: p.cognome || '', nome: p.nome || '', tipologia: p.tipologia || '',
+        agente: p.agente_attuale || '', stato: p.stato_attuale || '',
+      }));
+    }
+    return mgmtRows(tab).map(w => {
+      const p = practiceByPid[w.pratica_id] || {};
+      return {
+        pid: w.pratica_id, w,
+        cognome: w.cognome || p.cognome || '', nome: w.nome || p.nome || '',
+        tipologia: w.tipologia || p.tipologia || '', agente: w.agente_attuale || p.agente_attuale || '',
+        stato: p.stato_attuale || '',
+      };
+    });
+  }
+  function poolFiltered(items) {
+    const q = poolFilter.q.toLowerCase().trim();
+    return items.filter(it =>
+      (!poolFilter.st  || it.stato === poolFilter.st) &&
+      (!poolFilter.tip || it.tipologia === poolFilter.tip) &&
+      (!poolFilter.ag  || it.agente === poolFilter.ag) &&
+      (!q || [it.pid, it.cognome, it.nome, it.tipologia, it.agente, it.stato].join(' ').toLowerCase().includes(q)));
+  }
+  function poolFiltersHtml(items) {
+    const opts = key => [...new Set(items.map(i => i[key]).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'it'));
+    const sel = (field, key, label) => `
+      <label>${label}
+        <select class="form-select form-select-sm" data-fkey="poolf:${field}" onchange="App.poolSet('${field}', this.value)" aria-label="${label}">
+          <option value="">Tutti</option>
+          ${opts(key).map(v => `<option value="${esc(v)}" ${v === poolFilter[field] ? 'selected' : ''}>${esc(v)}</option>`).join('')}
+        </select>
+      </label>`;
+    const active = poolFilter.q || poolFilter.st || poolFilter.tip || poolFilter.ag;
+    return `
+      <div class="ec-pool-filters">
+        <input type="search" class="form-control form-control-sm" data-fkey="pool-search" placeholder="Cerca pratica, nome, agente…"
+          value="${esc(poolFilter.q)}" oninput="App.filterPool(this.value)" aria-label="Cerca nel pool"/>
+        ${sel('st', 'stato', 'Stato')}${sel('tip', 'tipologia', 'Tipologia')}${sel('ag', 'agente', 'Agente')}
+        ${active ? '<button type="button" class="btn btn-sm btn-outline-secondary" onclick="App.poolReset()">Azzera filtri</button>' : ''}
+      </div>`;
+  }
+
   function renderPool() {
     const el = $('pool-content');
     if (!el) return;
     if (!dataLoaded) { el.innerHTML = spinner; return; }
     if (!activeReport) { el.innerHTML = UI.emptyState(svg('<circle cx="12" cy="12" r="10"/>', 40), 'Nessun report attivo'); return; }
 
-    const { unassigned, regularPool, sallyPool } = poolSplit();
-    if (!unassigned.length) {
-      el.innerHTML = UI.emptyState(svg('<polyline points="20 6 9 17 4 12"/>', 40), 'Tutte le pratiche sono state assegnate');
-      return;
+    const counts = { assign: poolSplit().unassigned.length };
+    for (const k of ['da_chiamare', ...UI.MGMT_STATUSES]) counts[k] = mgmtRows(k).length;
+    const tabs = POOL_TABS.map(k => `
+      <button type="button" class="ec-chip ${k === poolTab ? 'is-active' : ''}" onclick="App.goPool('${k}')" aria-pressed="${k === poolTab}">
+        <span class="ec-st-dot" style="background:${poolHex(k)}"></span>${POOL_LABELS[k]} <strong>${fmt(counts[k])}</strong>
+      </button>`).join('');
+
+    const items = poolItems(poolTab);
+    const rows = poolFiltered(items);
+    const note = poolTab === 'assign' ? 'Pratiche non ancora assegnate a nessun collega'
+      : 'Le pratiche arrivano qui alle 19 del giorno in cui vengono segnalate';
+
+    let body;
+    if (!items.length) {
+      body = UI.emptyState(svg('<polyline points="20 6 9 17 4 12"/>', 40),
+        poolTab === 'assign' ? 'Tutte le pratiche sono state assegnate' : `Nessuna pratica nel pool ${POOL_LABELS[poolTab]}`);
+    } else if (!rows.length) {
+      body = UI.emptyState(svg('<circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>', 40), 'Nessuna pratica corrisponde ai filtri');
+    } else if (poolTab === 'assign') {
+      body = poolAssignHtml(rows);
+    } else {
+      body = poolWorkHtml(rows);
     }
 
-    const { poolPractices } = runEngine(manualAssignments());
-    const reasonMap = {};
-    for (const p of poolPractices) reasonMap[p.id] = p._reason;
+    el.innerHTML = `
+      <div class="card">
+        <div class="card-header ec-plan-toolbar">
+          <div class="ec-chips">${tabs}</div>
+          <small class="text-muted ms-auto">${note}${items.length ? ` · ${rows.length === items.length ? fmt(items.length) : fmt(rows.length) + ' di ' + fmt(items.length)} pratiche` : ''}</small>
+        </div>
+        ${items.length ? poolFiltersHtml(items) : ''}
+        ${body}
+      </div>`;
+  }
 
-    const searchKey = p => [p.pratica_id, p.cognome, p.nome, p.tipologia, p.agente_attuale].join(' ').toLowerCase();
+  function poolShowMore(total, shown) {
+    return total > shown ? `
+      <div class="card-footer text-center">
+        <span class="text-muted small me-2">Mostrate ${fmt(shown)} su ${fmt(total)}</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="App.showAllPool()">Mostra tutte</button>
+      </div>` : '';
+  }
+
+  // Scheda "Da assegnare": pool normale (assegnazione manuale) + Agenti Sally
+  function poolAssignHtml(rows) {
+    const PAGE = 200;
+    const regular = rows.filter(r => !r.sally), sally = rows.filter(r => r.sally);
     const assignOptions = colleagues.filter(c => c.active).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
-
-    const poolRow = (p, showAssign) => `
-      <tr class="pool-row" data-search="${esc(searchKey(p))}">
-        <td class="font-monospace small">${UI.praticaLink(p.pratica_id)}</td>
-        <td>${esc(p.cognome)} ${esc(p.nome)}</td>
-        <td class="text-muted small">${esc(p.tipologia) || '—'}</td>
-        <td>${UI.statoBadge(esc(p.stato_attuale))}</td>
-        <td class="text-muted small">${REASON_LABELS[reasonMap[p.id]] || '—'}</td>
+    const poolRow = (r, showAssign) => `
+      <tr class="pool-row">
+        <td class="font-monospace small">${UI.praticaLink(r.pid)}</td>
+        <td>${esc(r.cognome)} ${esc(r.nome)}</td>
+        <td class="text-muted small">${esc(r.tipologia) || '—'}</td>
+        <td>${UI.statoBadge(esc(r.stato))}</td>
+        <td class="text-muted small">${REASON_LABELS[r.reason] || '—'}</td>
         ${showAssign ? `<td>
-          <select class="form-select form-select-sm" style="width:auto" data-practice="${p.id}"
+          <select class="form-select form-select-sm" style="width:auto" data-practice="${r.p.id}"
             onchange="App.assignFromPool(this.dataset.practice, this.value)">
             <option value="">— assegna —</option>${assignOptions}
           </select>
-        </td>` : `<td class="text-muted small">${esc(p.agente_attuale) || '—'}</td>`}
+        </td>` : `<td class="text-muted small">${esc(r.agente) || '—'}</td>`}
       </tr>`;
-
-    const PAGE = 200;
-    const regularShown = _poolShowAll ? regularPool : regularPool.slice(0, PAGE);
-
-    el.innerHTML = `
-      ${regularPool.length ? `
-      <div class="card mb-4">
-        <div class="card-header">
-          <h3 class="card-title">Pool — ${fmt(regularPool.length)} pratiche non assegnate</h3>
-          <div class="card-options">
-            <input type="text" id="pool-search" data-fkey="pool-search" class="form-control form-control-sm" style="width:240px"
-              placeholder="Cerca pratica, nome, tipologia…" value="${esc(_poolSearchTerm)}"
-              oninput="App.filterPool(this.value)"/>
-          </div>
-        </div>
+    const shown = l => _poolShowAll ? l : l.slice(0, PAGE);
+    return `
+      ${regular.length ? `
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
             <thead><tr><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Motivo</th><th>Assegna a</th></tr></thead>
-            <tbody>${regularShown.map(p => poolRow(p, true)).join('')}</tbody>
+            <tbody>${shown(regular).map(r => poolRow(r, true)).join('')}</tbody>
           </table>
         </div>
-        ${!_poolShowAll && regularPool.length > PAGE ? `
-          <div class="card-footer text-center">
-            <span class="text-muted small me-2">Mostrate ${PAGE} su ${fmt(regularPool.length)}</span>
-            <button class="btn btn-sm btn-outline-secondary" onclick="App.showAllPool()">Mostra tutte</button>
-          </div>` : ''}
-      </div>` : ''}
-
-      ${sallyPool.length ? `
-      <div class="card border-danger">
-        <div class="card-header bg-danger-lt">
-          <h3 class="card-title text-danger">Agenti Sally — ${fmt(sallyPool.length)} pratiche</h3>
-          <div class="card-options">
-            <small class="text-muted">Pool separata, non agganciata a nessun collega</small>
-          </div>
+        ${_poolShowAll ? '' : poolShowMore(regular.length, Math.min(PAGE, regular.length))}` : ''}
+      ${sally.length ? `
+        <div class="card-header bg-danger-lt border-top">
+          <h3 class="card-title text-danger">Agenti Sally — ${fmt(sally.length)} pratiche</h3>
+          <div class="card-options"><small class="text-muted">Pool separata, non agganciata a nessun collega</small></div>
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
             <thead><tr><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Motivo</th><th>Agente attuale</th></tr></thead>
-            <tbody>${sallyPool.slice(0, 200).map(p => poolRow(p, false)).join('')}</tbody>
+            <tbody>${shown(sally).map(r => poolRow(r, false)).join('')}</tbody>
           </table>
         </div>
-        ${sallyPool.length > 200 ? `<div class="card-footer text-muted text-center small">Mostrate 200 su ${fmt(sallyPool.length)}</div>` : ''}
-      </div>` : ''}`;
-
-    if (_poolSearchTerm) filterPool(_poolSearchTerm);
+        ${_poolShowAll ? '' : poolShowMore(sally.length, Math.min(PAGE, sally.length))}` : ''}`;
   }
+
+  // Schede "Da chiamare" / Audit / xFlat / Help (righe di practice_work)
+  function poolWorkHtml(rows) {
+    const PAGE = 200;
+    const calls = poolTab === 'da_chiamare';
+    const shown = _poolShowAll ? rows : rows.slice(0, PAGE);
+    return `
+      <div class="ec-grid-wrap ec-grid-wrap--auto">
+        <table class="ec-grid ec-grid--pool">
+          <thead><tr>
+            <th>Pratica</th><th>Cognome</th><th>Nome</th><th>Note</th><th>Tipologia</th><th>Istituto Finanziario</th>
+            <th>Agente Attuale</th><th>Stato Attuale</th><th>Operatore</th><th>Segnalata</th>
+            ${calls ? '<th>Chiamato</th><th>Note chiamata</th>' : '<th>Note gestione</th><th></th>'}
+          </tr></thead>
+          <tbody>
+            ${shown.map(({ w, stato }) => `
+              <tr data-pid="${esc(w.pratica_id)}" class="${calls && w.called ? 'is-called' : ''}">
+                <td class="ec-col-id">${UI.praticaLink(w.pratica_id)}</td>
+                ${cell(w.cognome)}${cell(w.nome)}
+                <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
+                ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
+                <td>${UI.statoBadge(esc(stato))}</td>
+                ${cell(colName(w.colleague_id) || userName(w.set_by))}
+                <td>${new Date(w.set_at).toLocaleDateString('it-IT')}</td>
+                ${calls ? `
+                <td>
+                  <select class="form-select form-select-sm ec-called-select" data-fkey="called:${esc(w.pratica_id)}"
+                    aria-label="Chiamato" onchange="App.setCalled(this)">
+                    <option value="0" ${w.called ? '' : 'selected'}>No</option>
+                    <option value="1" ${w.called ? 'selected' : ''}>Sì</option>
+                  </select>
+                </td>
+                <td class="ec-col-note">
+                  <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
+                    value="${esc(w.pool_note || '')}" placeholder="Esito della chiamata…" maxlength="1000" autocomplete="off"
+                    aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
+                </td>` : `
+                <td class="ec-col-note">
+                  <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
+                    value="${esc(w.pool_note || '')}" placeholder="Esito / azioni…" maxlength="1000" autocomplete="off"
+                    aria-label="Note gestione" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
+                </td>
+                <td><button type="button" class="btn btn-sm btn-outline-secondary" onclick="App.closePoolRow(this)">Chiudi</button></td>`}
+              </tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+      ${_poolShowAll ? '' : poolShowMore(rows.length, Math.min(PAGE, rows.length))}`;
+  }
+
+  // Filtri del pool
+  const poolRenderSoon = debounce(() => withFocus(renderPool), 180);
+  function filterPool(term) { poolFilter.q = term || ''; _poolShowAll = false; poolRenderSoon(); }
+  function poolSet(field, value) { poolFilter[field] = value || ''; _poolShowAll = false; withFocus(renderPool); }
+  function poolReset() { Object.assign(poolFilter, { q: '', st: '', tip: '', ag: '' }); _poolShowAll = false; renderPool(); }
 
   async function assignFromPool(practiceId, colleagueId) {
     if (!colleagueId) return;
@@ -1559,13 +1701,6 @@
     }
   }
 
-  // Pool: ricerca client-side (senza perdere il focus dell'input)
-  function filterPool(term) {
-    _poolSearchTerm = (term || '').toLowerCase().trim();
-    document.querySelectorAll('.pool-row').forEach(row => {
-      row.style.display = (row.dataset.search || '').includes(_poolSearchTerm) ? '' : 'none';
-    });
-  }
   function showAllPool() {
     _poolShowAll = true;
     renderPool();
@@ -1723,8 +1858,8 @@
   window.App = window.AppRuntime = {
     setStatus, saveNote, planSearch, planChip, planMore, setSeriesDays, setSeriesMode,
     setCalled, setPoolNote, closePoolRow,
-    openScheda, backToDashboard, setPeriod, setMgmtTab,
-    assignFromPool, filterPool, showAllPool,
+    openScheda, backToDashboard, setPeriod, goPool, goMine,
+    assignFromPool, filterPool, showAllPool, poolSet, poolReset,
     sendChat, openNotification,
     impersonate: id => Auth.impersonate(id),
   };
