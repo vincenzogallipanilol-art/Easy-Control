@@ -36,6 +36,7 @@
   });
   document.getElementById('user-name-display').textContent = profile.full_name || profile.email;
   document.getElementById('user-role-badge').innerHTML = UI.renderRoleBadge(profile.role);
+  document.getElementById('user-avatar').textContent = String(profile.full_name || profile.email || '?').trim()[0].toUpperCase();
 
   // 2a. Impersonificazione (solo admin): banner fisso con ritorno all'account principale
   if (Auth.isImpersonating()) {
@@ -71,6 +72,9 @@
   let currentTarget     = null;
   let schedaColleagueId = null;
   let statsPeriod       = 'day';
+  let series            = null;   // righe check_series(): null = migration non eseguita
+  let seriesDays        = 7;
+  let seriesMode        = 'user'; // 'user' | 'status'
   let mgmtTab           = 'audit';
   const planFilter      = {};  // colleague_id -> { q, st }
   let _poolSearchTerm   = '';
@@ -199,6 +203,7 @@
       if (!schedaColleagueId) target = 'dashboard';
     }
     currentTarget = target;
+    updateHeader(target);
 
     const navKey = target === 'scheda' ? 'dashboard' : target;
     navLinks.forEach(l => l.classList.toggle('active', l.dataset.nav === navKey));
@@ -223,6 +228,26 @@
     navigate(l.dataset.nav, null, true);
   }));
   window.addEventListener('popstate', navigateFromHash);
+  document.querySelector('[data-nav-home]')?.addEventListener('click', e => { e.preventDefault(); navigate(defaultTarget(), null, true); });
+
+  // Intestazione: saluto + sottotitolo della pagina
+  const SUBTITLES = {
+    dashboard: 'Pratiche controllate e carico di lavoro in tempo reale',
+    pool:      'Pratiche non ancora assegnate a nessun collega',
+    gestione:  'Audit, xFlat e Help in attesa di gestione',
+    scheda:    'Piano di lavoro del collega',
+    mine:      'Il tuo piano di lavoro di oggi',
+    chat:      'Scrivi al team e tagga i colleghi',
+    admin:     'Utenti, colleghi e regole di distribuzione',
+  };
+  function updateHeader(target) {
+    const h = Number(romeParts(new Date()).hour);
+    const hello = h < 13 ? 'Buongiorno' : h < 18 ? 'Buon pomeriggio' : 'Buonasera';
+    const first = String(profile.full_name || profile.email || '').trim().split(/[\s@.]+/)[0];
+    const t = $('page-greeting'), sub = $('page-subtitle');
+    if (t) t.textContent = `${hello}${first ? ' ' + first : ''}!`;
+    if (sub) sub.textContent = SUBTITLES[target] || '';
+  }
 
   // ── Render: sezione corrente ───────────────────────────────────────
   function renderSection(target) {
@@ -310,7 +335,11 @@
     try { stats = await DB.getCheckStats(); }
     catch (e) { stats = []; if (!DB.isMissingSchema(e)) console.warn('check_stats', e); }
   }
-  const refreshStatsSoon = debounce(async () => { await loadStats(); softRender(); }, 2000);
+  async function loadSeries() {
+    try { series = await DB.getCheckSeries(seriesDays); }
+    catch (e) { series = null; if (!DB.isMissingSchema(e)) console.warn('check_series', e); }
+  }
+  const refreshStatsSoon = debounce(async () => { await Promise.all([loadStats(), loadSeries()]); softRender(); }, 2000);
 
   // Tempi di caricamento (console.table con ?perf=1 nell'indirizzo)
   const _t0 = performance.now(), _marks = [];
@@ -410,6 +439,7 @@
         DB.getNotifications(),
         DB.getChatMessages(),
         loadStats(),
+        loadSeries(),
       ]);
       users = usersData;
       notifications = notifData;
@@ -645,7 +675,7 @@
       const checkedToday = stats.reduce((s, r) => s + Number(r.n_day || 0), 0);
 
       top = `
-        <div class="row g-3 mb-3">
+        <div class="ec-kpis mb-3">
           ${UI.kpiTile('Pratiche totali',   fmt(practices.length),   iconDoc(),   'blue')}
           ${UI.kpiTile('Assegnate',         fmt(assignedCount),      iconCheck(), 'green')}
           ${UI.kpiTile('In Pool',           fmt(regularPool.length), iconPool(),  'orange')}
@@ -662,7 +692,7 @@
 
     el.innerHTML = `
       ${top}
-      <div class="row g-3 mb-4">
+      <div class="ec-kpis mb-4">
         ${poolTile('da_chiamare', 'Pool Da chiamare', iconPhone(), 'orange')}
         ${poolTile('audit',       'Pool Audit',       iconFlag(),  'red')}
         ${poolTile('xflat',       'Pool xFlat',       iconFlag(),  'purple')}
@@ -671,13 +701,95 @@
 
       ${chartsHtml()}
 
-      <h3 class="mt-4 mb-2">Numeri per utente</h3>
+      <div class="ec-section-head mt-4 mb-3">
+        <h3 class="mb-0">${svg('<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>', 22)} Numeri per utente</h3>
+        <div class="btn-group ec-seg" role="group" aria-label="Periodo">
+          ${Object.entries(PERIODS).map(([k, p]) => `
+            <button type="button" class="btn ${k === statsPeriod ? 'btn-primary' : ''}" onclick="App.setPeriod('${k}')">${p.label}</button>`).join('')}
+        </div>
+      </div>
       ${colleagueBoxesHtml()}
 
       ${activeReport ? distributionHtml() : ''}`;
+    UI.mountLineCharts(el);
   }
 
+  // Ultimi N giorni (data italiana), ancorati al giorno di oggi a Roma
+  function lastDays(n) {
+    const p = romeParts(new Date());
+    const base = Date.UTC(+p.year, +p.month - 1, +p.day);
+    const out = [];
+    for (let i = n - 1; i >= 0; i--) out.push(new Date(base - i * 86400000).toISOString().slice(0, 10));
+    return out;
+  }
+  const itDate = iso => iso.split('-').reverse().join('/');
+
   function chartsHtml() {
+    if (series === null) return chartsFallbackHtml();
+    const days = lastDays(seriesDays);
+    const idx = Object.fromEntries(days.map((d, i) => [d, i]));
+    const zero = () => days.map(() => 0);
+    const map = new Map();
+    const get = (key, name, color) => { if (!map.has(key)) map.set(key, { key, name, color, values: zero() }); return map.get(key); };
+
+    if (seriesMode === 'status') {
+      for (const [k, st] of Object.entries(UI.WORK_STATUSES)) get(k, st.short, st.hex);
+      for (const r of series) { const i = idx[r.check_day]; if (i !== undefined && map.has(r.status)) map.get(r.status).values[i] += Number(r.n || 0); }
+    } else {
+      colleagues.filter(c => c.active).forEach(c => get(c.id, c.name, UI.colleagueHex(c.color_idx)));
+      const extra = ['#6b7280', '#0ea5a4', '#b45309', '#7c3aed'];
+      for (const r of series) {
+        const i = idx[r.check_day];
+        if (i === undefined) continue;
+        const key = r.colleague_id || ('u:' + r.user_id);
+        let s = map.get(key);
+        if (!s) {
+          const col = colleagues.find(c => c.id === r.colleague_id);
+          s = get(key, col ? col.name : userName(r.user_id), col ? UI.colleagueHex(col.color_idx) : extra[map.size % extra.length]);
+        }
+        s.values[i] += Number(r.n || 0);
+      }
+    }
+    const list = [...map.values()];
+    const total = list.reduce((a, s) => a + s.values.reduce((x, y) => x + y, 0), 0);
+
+    return `
+      <div class="card ec-chart-card">
+        <div class="card-header">
+          <h3 class="card-title">${svg('<line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/>', 22)}
+            <span>Pratiche controllate</span> <span class="text-muted fw-normal ms-1">· ${fmt(total)} negli ultimi ${seriesDays} giorni</span></h3>
+          <div class="card-options ec-chart-controls">
+            <div class="btn-group ec-seg" role="group" aria-label="Serie">
+              <button type="button" class="btn ${seriesMode === 'user' ? 'btn-primary' : ''}" onclick="App.setSeriesMode('user')">Per utente</button>
+              <button type="button" class="btn ${seriesMode === 'status' ? 'btn-primary' : ''}" onclick="App.setSeriesMode('status')">Per stato</button>
+            </div>
+            <label class="ec-days"><span>Giorni</span>
+              <select class="form-select form-select-sm" onchange="App.setSeriesDays(this.value)" aria-label="Giorni">
+                ${[7, 14, 30, 90].map(d => `<option value="${d}" ${d === seriesDays ? 'selected' : ''}>${d}</option>`).join('')}
+              </select>
+            </label>
+          </div>
+        </div>
+        <div class="card-body">
+          ${UI.lineChart('checks-' + seriesMode, days.map(itDate), list, { title: 'Pratiche controllate per giorno', empty: 'Nessuna pratica controllata nel periodo' })}
+        </div>
+      </div>`;
+  }
+
+  async function setSeriesDays(v) {
+    const n = [7, 14, 30, 90].includes(+v) ? +v : 7;
+    if (n === seriesDays) return;
+    seriesDays = n;
+    await loadSeries();
+    if (currentTarget === 'dashboard') renderDashboard();
+  }
+  function setSeriesMode(m) {
+    if (!['user', 'status'].includes(m) || m === seriesMode) return;
+    seriesMode = m;
+    if (currentTarget === 'dashboard') renderDashboard();
+  }
+
+  function chartsFallbackHtml() {
     const per = PERIODS[statsPeriod];
     const byOwner  = statsSum(per.field, ownerKey);
     const byStatus = statsSum(per.field, r => r.status);
@@ -730,7 +842,8 @@
       const tip = p.tipologia || 'Altro';
       b.byTipologia[tip] = (b.byTipologia[tip] || 0) + 1;
     }
-    const checkedToday = statsSum('n_day', ownerKey);
+    const per = PERIODS[statsPeriod];
+    const checkedToday = statsSum(per.field, ownerKey);
 
     const active = colleagues.filter(c => c.active);
     if (!active.length) return '<div class="text-muted small">Nessun collega attivo.</div>';
@@ -753,7 +866,7 @@
                 </div>
                 <div class="ec-box-nums">
                   <div><strong>${fmt(s.total)}</strong><span>Assegnate</span></div>
-                  <div><strong>${fmt(checkedToday[c.id] || 0)}</strong><span>Controllate oggi</span></div>
+                  <div><strong>${fmt(checkedToday[c.id] || 0)}</strong><span>Controllate ${per.text}</span></div>
                 </div>
                 ${tipRows.length ? `
                   <div class="small text-muted mt-3">
@@ -1608,7 +1721,7 @@
 
   // Funzioni richiamate dagli handler inline
   window.App = window.AppRuntime = {
-    setStatus, saveNote, planSearch, planChip, planMore,
+    setStatus, saveNote, planSearch, planChip, planMore, setSeriesDays, setSeriesMode,
     setCalled, setPoolNote, closePoolRow,
     openScheda, backToDashboard, setPeriod, setMgmtTab,
     assignFromPool, filterPool, showAllPool,

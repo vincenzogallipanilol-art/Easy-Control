@@ -302,6 +302,12 @@ const DB = (() => {
   }
 
   // Conteggi delle pratiche controllate: per collega/stato, oggi/settimana/mese/totale
+  // Serie giornaliera (ultimi N giorni): una riga per giorno / collega / utente / stato
+  async function getCheckSeries(days) {
+    const { data, error } = await db.rpc('check_series', { p_days: days });
+    if (error) throw error;
+    return data || [];
+  }
   async function getCheckStats() {
     const { data, error } = await db.rpc('check_stats');
     if (error) throw error;
@@ -360,7 +366,7 @@ const DB = (() => {
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser,
     getAgentExclusions, addAgentExclusion, deleteAgentExclusion,
-    getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, notifyMentions,
+    getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, getCheckSeries, notifyMentions,
     isMissingSchema,
     getNotifications, markNotificationRead, markAllNotificationsRead,
     getChatMessages, sendChatMessage,

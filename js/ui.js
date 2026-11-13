@@ -50,6 +50,9 @@ const UI = (() => {
 
   // ── COLLEAGUE COLORS ──────────────────────── */
   const COLORS = ['blue','green','orange','purple','red','cyan','teal','yellow','pink','indigo'];
+  const HEX = { blue: '#3b82f6', green: '#22a559', orange: '#f76707', purple: '#a855f7', red: '#e03131', cyan: '#15aabf',
+                teal: '#12b3a8', yellow: '#f5b301', pink: '#d6336c', indigo: '#5c6ac4' };
+  const colleagueHex = idx => HEX[COLORS[idx % COLORS.length]] || HEX.blue;
   function colleagueColor(colorIdx) {
     return COLORS[colorIdx % COLORS.length] || 'blue';
   }
@@ -61,20 +64,12 @@ const UI = (() => {
   // ── KPI TILE ───────────────────────────── */
   function kpiTile(label, value, icon, color = 'blue', sub = '') {
     return `
-      <div class="col-sm-6 col-xl-3">
-        <div class="card card-sm">
-          <div class="card-body">
-            <div class="row align-items-center">
-              <div class="col-auto">
-                <span class="bg-${color}-lt avatar">${icon}</span>
-              </div>
-              <div class="col">
-                <div class="font-weight-medium">${value}</div>
-                <div class="text-secondary">${label}${sub ? ` <span class="text-muted small">· ${sub}</span>` : ''}</div>
-              </div>
-            </div>
-          </div>
+      <div class="ec-kpi ec-kpi--${color}">
+        <div class="ec-kpi-top">
+          <span class="ec-kpi-icon">${icon}</span>
+          <span class="ec-kpi-value">${value}</span>
         </div>
+        <div class="ec-kpi-label">${label}${sub ? ` <span class="ec-kpi-sub">· ${sub}</span>` : ''}</div>
       </div>`;
   }
 
@@ -254,11 +249,162 @@ const UI = (() => {
     return d.toLocaleDateString('it-IT');
   }
 
+
+  // ── GRAFICO A LINEE (cartesiano, curve morbide, una serie per utente) ─────
+  // Il disegno viene fatto alla larghezza reale del contenitore (mountLineCharts),
+  // cosi' testi e punti restano nitidi su qualsiasi schermo.
+  const _lines = {};        // id -> { labels, series, off:Set }
+  function lineChart(id, labels, series, opts = {}) {
+    const prevOff = _lines[id] ? _lines[id].off : new Set();
+    _lines[id] = { labels, series, off: prevOff, height: opts.height || 330, title: opts.title || 'Grafico' };
+    const empty = !series.length || series.every(s => s.values.every(v => !v));
+    const legend = series.map(s => `
+      <button type="button" class="ec-leg${prevOff.has(s.key) ? ' is-off' : ''}" data-chart="${esc(id)}" data-series="${esc(s.key)}" style="--c:${s.color}">
+        <span class="ec-leg-box"></span>${esc(s.name)}
+      </button>`).join('');
+    return `
+      <div class="ec-line-wrap" data-chart-wrap="${esc(id)}">
+        ${empty ? `<div class="ec-chart-empty">${esc(opts.empty || 'Nessun dato nel periodo selezionato')}</div>` : `
+        <div class="ec-legend">${legend}</div>
+        <div class="ec-line" data-chart="${esc(id)}"></div>`}
+      </div>`;
+  }
+
+  // Curva monotona (niente overshoot sotto lo zero)
+  function _smooth(pts) {
+    const n = pts.length;
+    if (n < 2) return n ? `M${pts[0][0]},${pts[0][1]}` : '';
+    const dx = [], dy = [], m = [];
+    for (let i = 0; i < n - 1; i++) { dx.push(pts[i + 1][0] - pts[i][0]); dy.push(pts[i + 1][1] - pts[i][1]); m.push(dy[i] / dx[i]); }
+    const t = [m[0]];
+    for (let i = 1; i < n - 1; i++) t.push(m[i - 1] * m[i] <= 0 ? 0 : (m[i - 1] + m[i]) / 2);
+    t.push(m[n - 2]);
+    for (let i = 0; i < n - 1; i++) {
+      if (m[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; }
+      const a = t[i] / m[i], b = t[i + 1] / m[i], s = a * a + b * b;
+      if (s > 9) { const k = 3 / Math.sqrt(s); t[i] = k * a * m[i]; t[i + 1] = k * b * m[i]; }
+    }
+    let d = `M${pts[0][0]},${pts[0][1]}`;
+    for (let i = 0; i < n - 1; i++) {
+      const h = dx[i] / 3;
+      d += ` C${pts[i][0] + h},${pts[i][1] + t[i] * h} ${pts[i + 1][0] - h},${pts[i + 1][1] - t[i + 1] * h} ${pts[i + 1][0]},${pts[i + 1][1]}`;
+    }
+    return d;
+  }
+
+  function _drawLine(box) {
+    const c = _lines[box.dataset.chart];
+    if (!c) return;
+    const W = Math.max(320, Math.round(box.clientWidth || 640)), H = W < 560 ? 280 : c.height;
+    const padL = 46, padR = 40, padT = 16, padB = 36;
+    const plotW = W - padL - padR, plotH = H - padT - padB;
+    const n = c.labels.length;
+    const vis = c.series.filter(s => !c.off.has(s.key));
+    const max = niceMax(Math.max(1, ...(vis.length ? vis : c.series).flatMap(s => s.values)));
+    const ticks = 5, step = max / ticks;
+    const x = i => padL + (n === 1 ? plotW / 2 : (plotW * i) / (n - 1));
+    const y = v => padT + plotH - (v / max) * plotH;
+    const fmt = v => Number(v).toLocaleString('it-IT');
+
+    let grid = '';
+    for (let i = 0; i <= ticks; i++) {
+      const yy = y(step * i);
+      grid += `<line x1="${padL}" x2="${W - padR}" y1="${yy}" y2="${yy}" class="${i ? 'ec-chart-grid' : 'ec-chart-axis'}"/>` +
+              `<text x="${padL - 10}" y="${yy + 4}" text-anchor="end" class="ec-chart-tick">${fmt(step * i)}</text>`;
+    }
+    const every = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(plotW / 84))));
+    let xs = '';
+    c.labels.forEach((l, i) => {
+      xs += `<line x1="${x(i)}" x2="${x(i)}" y1="${padT}" y2="${padT + plotH}" class="ec-chart-grid ec-chart-vgrid"/>`;
+      if (i % every === 0 || i === n - 1) {
+        const lab = plotW / n < 78 ? l.slice(0, 5) : l;
+        xs += `<text x="${x(i)}" y="${H - 12}" text-anchor="middle" class="ec-chart-tick">${esc(lab)}</text>`;
+      }
+    });
+
+    const lines = c.series.map(s => {
+      const pts = s.values.map((v, i) => [x(i), y(v)]);
+      return `
+        <g class="ec-line-series" data-series="${esc(s.key)}" style="--c:${s.color}"${c.off.has(s.key) ? ' hidden' : ''}>
+          <path d="${_smooth(pts)}" class="ec-line-path" stroke="${s.color}"/>
+          ${pts.map(p => `<circle cx="${p[0]}" cy="${p[1]}" r="4" class="ec-line-dot" stroke="${s.color}"/>`).join('')}
+        </g>`;
+    }).join('');
+
+    box.innerHTML = `
+      <svg viewBox="0 0 ${W} ${H}" width="${W}" height="${H}" role="img" aria-label="${esc(c.title)}" class="ec-line-svg" data-chart="${esc(box.dataset.chart)}"
+        data-pl="${padL}" data-pw="${plotW}">
+        ${grid}${xs}
+        <line class="ec-line-guide" y1="${padT}" y2="${padT + plotH}" x1="0" x2="0" style="display:none"/>
+        ${lines}
+        <rect x="${padL - 10}" y="${padT}" width="${plotW + 20}" height="${plotH}" fill="transparent" class="ec-line-hit"/>
+      </svg>`;
+    box.dataset.w = W;
+  }
+
+  function mountLineCharts(root = document) {
+    root.querySelectorAll('.ec-line[data-chart]').forEach(box => {
+      _drawLine(box);
+      if (typeof ResizeObserver === 'function') {
+        if (box._ro) box._ro.disconnect();
+        let t = null;
+        box._ro = new ResizeObserver(() => {
+          clearTimeout(t);
+          t = setTimeout(() => { if (box.isConnected && Math.abs((box.clientWidth || 0) - Number(box.dataset.w || 0)) > 8) _drawLine(box); }, 120);
+        });
+        box._ro.observe(box);
+      }
+    });
+  }
+
+  // Interazione: legenda (mostra/nascondi serie) e tooltip con tutte le serie del giorno
+  let _lineTip = null;
+  document.addEventListener('click', e => {
+    const b = e.target.closest && e.target.closest('.ec-leg');
+    if (!b) return;
+    const c = _lines[b.dataset.chart];
+    if (!c) return;
+    const k = b.dataset.series;
+    if (c.off.has(k)) c.off.delete(k); else c.off.add(k);
+    if (c.off.size >= c.series.length) c.off.clear();
+    b.closest('[data-chart-wrap]').querySelectorAll('.ec-leg').forEach(x => x.classList.toggle('is-off', c.off.has(x.dataset.series)));
+    const box = b.closest('[data-chart-wrap]').querySelector('.ec-line');
+    if (box) _drawLine(box);
+  });
+  function _hideLineTip() {
+    if (_lineTip) _lineTip.style.display = 'none';
+    document.querySelectorAll('.ec-line-guide').forEach(g => { g.style.display = 'none'; });
+  }
+  document.addEventListener('pointermove', e => {
+    const svg = e.target.closest && e.target.closest('.ec-line-svg');
+    if (!svg) { _hideLineTip(); return; }
+    const c = _lines[svg.dataset.chart];
+    if (!c) return;
+    const r = svg.getBoundingClientRect();
+    const scale = (svg.viewBox.baseVal.width || r.width) / r.width;
+    const padL = +svg.dataset.pl, plotW = +svg.dataset.pw, n = c.labels.length;
+    const lx = (e.clientX - r.left) * scale;
+    const i = Math.max(0, Math.min(n - 1, n === 1 ? 0 : Math.round(((lx - padL) / plotW) * (n - 1))));
+    const gx = padL + (n === 1 ? plotW / 2 : (plotW * i) / (n - 1));
+    const g = svg.querySelector('.ec-line-guide');
+    g.setAttribute('x1', gx); g.setAttribute('x2', gx); g.style.display = '';
+    if (!_lineTip) { _lineTip = document.createElement('div'); _lineTip.className = 'ec-chart-tip ec-line-tip'; document.body.appendChild(_lineTip); }
+    const rows = c.series.filter(s => !c.off.has(s.key)).map(s => ({ s, v: s.values[i] || 0 })).sort((a, b) => b.v - a.v);
+    _lineTip.innerHTML = `<div class="ec-tip-date">${esc(c.labels[i])}</div>` + rows.map(({ s, v }) =>
+      `<div class="ec-tip-row"><span class="ec-tip-sw" style="background:${s.color}"></span><span>${esc(s.name)}</span><strong>${Number(v).toLocaleString('it-IT')}</strong></div>`).join('');
+    _lineTip.style.display = 'block';
+    const tw = _lineTip.offsetWidth, th = _lineTip.offsetHeight;
+    let left = e.clientX + 16, top = e.clientY - th / 2;
+    if (left + tw > window.innerWidth - 8) left = e.clientX - tw - 16;
+    _lineTip.style.left = left + 'px'; _lineTip.style.top = Math.max(8, Math.min(top, window.innerHeight - th - 8)) + 'px';
+  });
+  document.addEventListener('pointerout', e => { if (!e.relatedTarget) _hideLineTip(); });
+
   return {
     toast, showLoader, hideLoader,
     renderRoleBadge, colleagueColor, colleagueBadge,
     kpiTile, statoBadge, progressBar, emptyState, confirm,
-    esc, WORK_STATUSES, MGMT_STATUSES, workBadge, praticaLink, barChart,
+    esc, WORK_STATUSES, MGMT_STATUSES, workBadge, praticaLink, barChart, lineChart, mountLineCharts, colleagueHex,
     initialsAvatar, timeAgo,
     COLORS,
   };

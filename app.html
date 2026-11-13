@@ -7,6 +7,9 @@
   <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin/>
   <link rel="preconnect" href="https://bnuajmbzacxymwxzexwl.supabase.co" crossorigin/>
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/css/tabler.min.css"/>
+  <link rel="preconnect" href="https://fonts.googleapis.com"/>
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"/>
   <link rel="stylesheet" href="css/app.css"/>
 </head>
 <body class="antialiased">
@@ -33,17 +36,18 @@
       <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar-menu">
         <span class="navbar-toggler-icon"></span>
       </button>
-      <h1 class="navbar-brand navbar-brand-autodark">
-        <a href="#" class="d-flex align-items-center gap-2 text-decoration-none">
-          <div style="width:32px;height:32px;border-radius:8px;background:linear-gradient(135deg,#206bc4,#4299e1);display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2">
-              <rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/>
-              <rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/>
+      <h1 class="navbar-brand navbar-brand-autodark ec-brand">
+        <a href="#" class="d-flex align-items-center gap-3 text-decoration-none" data-nav-home aria-label="Easy Control">
+          <span class="ec-logo" aria-hidden="true">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/>
+              <rect x="3" y="14" width="7" height="7" rx="1.5"/><path d="M14 17.5l2.2 2.2L21 15"/>
             </svg>
-          </div>
-          <span class="fw-bold ec-sidebar-label">Easy Control</span>
+          </span>
+          <span class="ec-brand-name ec-sidebar-label">Easy Control</span>
         </a>
       </h1>
+      <div class="ec-side-divider" aria-hidden="true"></div>
 
       <div class="collapse navbar-collapse" id="navbar-menu">
         <ul class="navbar-nav pt-lg-3">
@@ -140,10 +144,8 @@
       <div class="container-fluid ec-wide">
         <div class="row g-2 align-items-center">
           <div class="col">
-            <div class="d-flex align-items-center gap-2">
-              <span id="user-name-display" class="fw-medium"></span>
-              <span id="user-role-badge"></span>
-            </div>
+            <h2 id="page-greeting" class="ec-greeting">&nbsp;</h2>
+            <div id="page-subtitle" class="ec-subtitle">&nbsp;</div>
           </div>
           <div class="col-auto ms-auto d-print-none">
             <div class="d-flex gap-2 align-items-center">
@@ -177,6 +179,11 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 Esporta
               </button>
+              <!-- Utente -->
+              <div class="ec-user-chip" title="Utente collegato">
+                <span class="ec-user-avatar" id="user-avatar" aria-hidden="true"></span>
+                <span class="ec-user-meta"><span id="user-name-display"></span><span id="user-role-badge"></span></span>
+              </div>
             </div>
           </div>
         </div>
