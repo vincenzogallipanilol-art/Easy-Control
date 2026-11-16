@@ -138,7 +138,7 @@ const UI = (() => {
   const PRATICA_URL = 'https://finance.blackbird71.com/a/index2.php?modulo=pratiche&azione=apri&opzione=';
   function praticaLink(praticaId) {
     if (!praticaId) return '—';
-    return `<a href="${PRATICA_URL}${encodeURIComponent(praticaId)}" target="_blank" rel="noopener" title="Apri la pratica ${esc(praticaId)}">${esc(praticaId)}</a>`;
+    return `<a class="ec-pratica-btn" href="${PRATICA_URL}${encodeURIComponent(praticaId)}" target="_blank" rel="noopener" title="Apri la pratica ${esc(praticaId)} su EGG"><span>${esc(praticaId)}</span><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></a>`;
   }
 
   // ── GRAFICO A COLONNE (SVG, una serie) ──────────────────────────── */
