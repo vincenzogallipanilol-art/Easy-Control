@@ -539,3 +539,39 @@ body.is-impersonating .ec-sidebar { box-shadow: inset 3px 0 0 #f59f00; }
 .ec-pratica-btn svg { opacity: .85; flex-shrink: 0; }
 .ec-pratica-btn:hover { background: #1a56a0; transform: translateY(-1px); box-shadow: 0 3px 8px rgba(32, 107, 196, .4); }
 .ec-pratica-btn:focus-visible { outline: 2px solid #1a56a0; outline-offset: 2px; }
+
+/* ── FILTRI / ORDINAMENTO PER COLONNA (stile Excel) ─────────────── */
+th.ec-cf { white-space: nowrap; }
+.ec-cf-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; margin-left: .25rem; padding: 0;
+  border: 0; border-radius: 4px; background: transparent; color: #9aa7b7;
+  cursor: pointer; vertical-align: middle; opacity: .55;
+}
+th.ec-cf:hover .ec-cf-btn, .ec-cf-btn:focus-visible { opacity: 1; background: #e9eef5; }
+th.ec-cf.is-filtered .ec-cf-btn { opacity: 1; color: #206bc4; background: #dbe8f8; }
+th.ec-cf.is-asc .ec-cf-label::after { content: ' \2191'; color: #206bc4; }
+th.ec-cf.is-desc .ec-cf-label::after { content: ' \2193'; color: #206bc4; }
+.ec-chip--clear { color: #d63939; border-color: #f3c6c6; }
+.ec-cf-pop {
+  position: fixed; z-index: 2000; width: 264px; padding: .5rem;
+  background: #fff; border: 1px solid #dce1e7; border-radius: 8px;
+  box-shadow: 0 8px 28px rgba(24, 36, 51, .18);
+  font-size: .8125rem; font-weight: 400; text-transform: none; letter-spacing: 0; color: #182433;
+}
+.ec-cf-sort { display: flex; flex-direction: column; margin: -.25rem -.25rem .4rem; }
+.ec-cf-sort button {
+  text-align: left; padding: .35rem .5rem; border: 0; border-radius: 4px;
+  background: transparent; color: inherit; font-size: inherit; cursor: pointer;
+}
+.ec-cf-sort button:hover { background: #f1f4f8; }
+.ec-cf-sort button.is-on { color: #206bc4; font-weight: 600; }
+.ec-cf-all { display: flex; align-items: center; gap: .4rem; padding: .35rem .25rem; margin: 0; border-bottom: 1px solid #eef1f5; cursor: pointer; font-weight: 600; }
+.ec-cf-list { max-height: 240px; overflow: auto; padding: .25rem 0; }
+.ec-cf-item { display: flex; align-items: center; gap: .4rem; padding: .2rem .25rem; margin: 0; border-radius: 4px; cursor: pointer; }
+.ec-cf-item:hover { background: #f6f8fb; }
+.ec-cf-val { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ec-cf-val.is-blank { color: #8a97a8; font-style: italic; }
+.ec-cf-n { color: #8a97a8; font-variant-numeric: tabular-nums; font-size: .75rem; }
+.ec-cf-more { padding: .35rem .25rem; color: #8a97a8; font-size: .75rem; }
+.ec-cf-foot { display: flex; align-items: center; gap: .5rem; padding-top: .5rem; border-top: 1px solid #eef1f5; }

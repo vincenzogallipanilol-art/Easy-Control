@@ -1011,6 +1011,12 @@
     ['originale_archiviato', 'Originale Archiviato'],
   ];
   const PLAN_PAGE = 150;
+  // Valori per filtri/ordinamento per colonna (stile Excel)
+  const PLAN_CF = {
+    pid: p => p.pratica_id || '',
+    stato: p => { const s = effStatus(p.pratica_id || ''); return s ? ((UI.WORK_STATUSES[s] || {}).label || s) : 'Da lavorare'; },
+    ...Object.fromEntries(PLAN_COLS.filter(([k]) => k !== '__note').map(([k]) => [k, p => p[k]])),
+  };
   const planView  = {};  // colleague_id -> { rows, filtered, limit } (righe disegnate a blocchi)
   const dash = '<span class="text-muted">—</span>';
   const cell = v => `<td title="${esc(v)}">${v ? esc(v) : dash}</td>`;
@@ -1121,6 +1127,17 @@
     const f = planFilter[colleagueId] || (planFilter[colleagueId] = { q: '', st: '' });
     const cid = esc(colleagueId);
     planView[colleagueId] = { rows, filtered: rows, limit: (planView[colleagueId] || {}).limit || PLAN_PAGE };
+    ColFilter.register('plan:' + colleagueId, {
+      all: () => (planView[colleagueId] || { rows: [] }).rows,
+      cols: PLAN_CF,
+      onChange: () => {
+        const v = planView[colleagueId];
+        if (v) v.limit = PLAN_PAGE;
+        document.querySelectorAll('[data-plan]').forEach(c => {
+          if (c.dataset.plan === colleagueId) { renderChips(c); renderPlanBody(c); }
+        });
+      },
+    });
 
     const noId = rows.reduce((n, p) => n + (p.pratica_id ? 0 : 1), 0);
     const grid = rows.length ? `
@@ -1128,9 +1145,9 @@
       <div class="ec-grid-wrap">
         <table class="ec-grid" data-colleague="${cid}">
           <thead><tr>
-            <th class="ec-col-id">Pratica</th>
-            ${PLAN_COLS.map(([, label]) => `<th>${label}</th>`).join('')}
-            <th class="ec-col-status">Stato</th>
+            ${ColFilter.th('plan:' + colleagueId, 'pid', 'Pratica', 'ec-col-id')}
+            ${PLAN_COLS.map(([k, label]) => k === '__note' ? `<th>${label}</th>` : ColFilter.th('plan:' + colleagueId, k, label)).join('')}
+            ${ColFilter.th('plan:' + colleagueId, 'stato', 'Stato', 'ec-col-status')}
           </tr></thead>
           <tbody></tbody>
         </table>
@@ -1173,7 +1190,9 @@
     box.innerHTML =
       chip('', 'Tutte', v.rows.length) +
       chip('todo', 'Da lavorare', counts.todo) +
-      Object.entries(UI.WORK_STATUSES).map(([k, s]) => chip(k, s.short, counts[k] || 0, s.hex)).join('');
+      Object.entries(UI.WORK_STATUSES).map(([k, s]) => chip(k, s.short, counts[k] || 0, s.hex)).join('') +
+      (ColFilter.active('plan:' + card.dataset.plan)
+        ? '<button type="button" class="ec-chip ec-chip--clear" onclick="App.planClearCols(this)">✕ Cancella filtri colonne</button>' : '');
   }
 
   // Il piano puo' avere migliaia di righe: se ne disegnano a blocchi (scroll infinito)
@@ -1195,7 +1214,7 @@
     const v = planView[colleagueId];
     const f = planFilter[colleagueId] || { q: '', st: '' };
     const q = f.q.toLowerCase().trim();
-    v.filtered = v.rows.filter(p => {
+    v.filtered = ColFilter.apply('plan:' + colleagueId, v.rows.filter(p => {
       const pid = p.pratica_id || '';
       if (f.st) {
         const st = effStatus(pid);
@@ -1205,7 +1224,7 @@
       const w = workState(pid).w;
       return [pid, p.cognome, p.nome, p.tipologia, p.istituto_finanziario, p.agente_attuale, p.stato_attuale, w?.note]
         .join(' ').toLowerCase().includes(q);
-    });
+    }));
   }
 
   function renderPlanBody(card) {
@@ -1290,6 +1309,15 @@
     if (v) v.limit = PLAN_PAGE;
     withFocus(() => renderPlanBody(card));
   }, 180);
+  function planClearCols(btn) {
+    const card = btn.closest('[data-plan]');
+    if (!card) return;
+    ColFilter.clear('plan:' + card.dataset.plan);
+    const v = planView[card.dataset.plan];
+    if (v) v.limit = PLAN_PAGE;
+    renderChips(card);
+    renderPlanBody(card);
+  }
   function planChip(btn) {
     const card = btn.closest('[data-plan]');
     if (!card) return;
@@ -1530,6 +1558,19 @@
       };
     });
   }
+  // Valori per filtri/ordinamento per colonna (stile Excel)
+  const POOL_CF = {
+    pid: r => r.pid, cognome: r => r.cognome, nome: r => r.nome,
+    nominativo: r => `${r.cognome} ${r.nome}`.trim(),
+    tipologia: r => r.tipologia, stato: r => r.stato, agente: r => r.agente,
+    motivo: r => REASON_LABELS[r.reason] || '',
+    istituto: r => (r.w && r.w.istituto_finanziario) || '',
+    operatore: r => r.w ? (colName(r.w.colleague_id) || userName(r.w.set_by) || '') : '',
+    segnalata: r => r.w ? new Date(r.w.set_at).toLocaleDateString('it-IT') : '',
+  };
+  const POOL_CF_SORT = { segnalata: r => r.w ? r.w.set_at : '' };
+  const pth = (col, label) => ColFilter.th('pool:' + poolTab, col, label);
+
   function poolFiltered(items) {
     const q = poolFilter.q.toLowerCase().trim();
     return items.filter(it =>
@@ -1547,7 +1588,7 @@
           ${opts(key).map(v => `<option value="${esc(v)}" ${v === poolFilter[field] ? 'selected' : ''}>${esc(v)}</option>`).join('')}
         </select>
       </label>`;
-    const active = poolFilter.q || poolFilter.st || poolFilter.tip || poolFilter.ag;
+    const active = poolFilter.q || poolFilter.st || poolFilter.tip || poolFilter.ag || ColFilter.active('pool:' + poolTab);
     return `
       <div class="ec-pool-filters">
         <input type="search" class="form-control form-control-sm" data-fkey="pool-search" placeholder="Cerca pratica, nome, agente…"
@@ -1571,7 +1612,11 @@
       </button>`).join('');
 
     const items = poolItems(poolTab);
-    const rows = poolFiltered(items);
+    ColFilter.register('pool:' + poolTab, {
+      all: () => items, cols: POOL_CF, sortKeys: POOL_CF_SORT,
+      onChange: () => { _poolShowAll = false; withFocus(renderPool); },
+    });
+    const rows = ColFilter.apply('pool:' + poolTab, poolFiltered(items));
     const note = poolTab === 'assign' ? 'Pratiche non ancora assegnate a nessun collega'
       : 'Le pratiche arrivano qui alle 19 del giorno in cui vengono segnalate';
 
@@ -1630,7 +1675,7 @@
       ${regular.length ? `
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Motivo</th><th>Assegna a</th></tr></thead>
+            <thead><tr>${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}<th>Assegna a</th></tr></thead>
             <tbody>${shown(regular).map(r => poolRow(r, true)).join('')}</tbody>
           </table>
         </div>
@@ -1642,7 +1687,7 @@
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr><th>Pratica</th><th>Nominativo</th><th>Tipologia</th><th>Stato</th><th>Motivo</th><th>Agente attuale</th></tr></thead>
+            <thead><tr>${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('agente', 'Agente attuale')}</tr></thead>
             <tbody>${shown(sally).map(r => poolRow(r, false)).join('')}</tbody>
           </table>
         </div>
@@ -1658,8 +1703,8 @@
       <div class="ec-grid-wrap ec-grid-wrap--auto">
         <table class="ec-grid ec-grid--pool">
           <thead><tr>
-            <th>Pratica</th><th>Cognome</th><th>Nome</th><th>Note</th><th>Tipologia</th><th>Istituto Finanziario</th>
-            <th>Agente Attuale</th><th>Stato Attuale</th><th>Operatore</th><th>Segnalata</th>
+            ${pth('pid', 'Pratica')}${pth('cognome', 'Cognome')}${pth('nome', 'Nome')}<th>Note</th>${pth('tipologia', 'Tipologia')}${pth('istituto', 'Istituto Finanziario')}
+            ${pth('agente', 'Agente Attuale')}${pth('stato', 'Stato Attuale')}${pth('operatore', 'Operatore')}${pth('segnalata', 'Segnalata')}
             ${calls ? '<th>Chiamato</th><th>Note chiamata</th>' : '<th>Note gestione</th><th></th>'}
           </tr></thead>
           <tbody>
@@ -1702,7 +1747,7 @@
   const poolRenderSoon = debounce(() => withFocus(renderPool), 180);
   function filterPool(term) { poolFilter.q = term || ''; _poolShowAll = false; poolRenderSoon(); }
   function poolSet(field, value) { poolFilter[field] = value || ''; _poolShowAll = false; withFocus(renderPool); }
-  function poolReset() { Object.assign(poolFilter, { q: '', st: '', tip: '', ag: '' }); _poolShowAll = false; renderPool(); }
+  function poolReset() { Object.assign(poolFilter, { q: '', st: '', tip: '', ag: '' }); ColFilter.clear('pool:'); _poolShowAll = false; renderPool(); }
 
   async function assignFromPool(practiceId, colleagueId) {
     if (!colleagueId) return;
@@ -1879,7 +1924,7 @@
 
   // Funzioni richiamate dagli handler inline
   window.App = window.AppRuntime = {
-    setStatus, saveNote, planSearch, planChip, planMore, setSeriesDays, setSeriesMode,
+    setStatus, saveNote, planSearch, planChip, planClearCols, planMore, setSeriesDays, setSeriesMode,
     setCalled, setPoolNote, closePoolRow,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, filterPool, showAllPool, poolSet, poolReset,
