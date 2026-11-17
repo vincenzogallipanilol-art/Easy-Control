@@ -397,14 +397,20 @@ h1, h2, h3, h4, h5, .card-title, .btn { font-family: var(--ec-font); }
   box-shadow: 0 0 0 2px rgba(214, 57, 57, .15);
 }
 
-/* Stato: ultima colonna, fissa a destra, menu a tendina */
+/* Stato: prima colonna, fissa a sinistra, menu a tendina; la Pratica gli sta accanto */
 .ec-grid .ec-col-status {
-  position: sticky; right: 0; z-index: 2;
-  min-width: 204px;
+  position: sticky; left: 0; z-index: 2;
+  width: 216px; min-width: 216px; max-width: 216px;
   overflow: visible;
-  box-shadow: -6px 0 6px -6px rgba(24, 36, 51, .12);
+  border-left: 4px solid transparent;
 }
-.ec-grid thead .ec-col-status { z-index: 4; }
+.ec-grid thead .ec-col-status { z-index: 4; border-left-color: #f6f8fb; }
+.ec-grid tr.has-st .ec-col-status { border-left-color: var(--st); }
+.ec-grid[data-colleague] .ec-col-id {
+  left: 216px; border-left: 0;
+  box-shadow: 6px 0 6px -6px rgba(24, 36, 51, .12);
+}
+.ec-grid[data-colleague] tr.has-st .ec-col-id { border-left: 0; }
 .ec-status-select, .ec-called-select {
   font-size: .8125rem;
   padding-top: .2rem; padding-bottom: .2rem;
@@ -632,3 +638,17 @@ th.ec-cf.is-desc .ec-cf-label::after { content: ' \2193'; color: #206bc4; }
 
 textarea.ec-mod-preview { min-height: 240px; width: 100%; resize: vertical; }
 .ec-mod-mat th { white-space: nowrap; }
+
+/* Note pratica: campo ben riconoscibile */
+.ec-grid th.ec-th-note { color: #a85a00; background: #fff1d6; }
+.ec-grid td.ec-col-note { background: #fffaf0; }
+.ec-grid .ec-note-input {
+  border: 1px solid #e3c88f; background: #fff; min-height: 30px;
+  box-shadow: inset 0 1px 2px rgba(24, 36, 51, .06);
+}
+.ec-grid .ec-note-input::placeholder { color: #a07b3c; font-style: italic; }
+.ec-grid tr:hover .ec-note-input { border-color: #d4a13f; background: #fff; }
+.ec-grid .ec-note-input:focus { border-color: var(--ec-accent); box-shadow: 0 0 0 2px rgba(32, 107, 196, .18); }
+.ec-sally-rev td { vertical-align: top; }
+.ec-sally-opt { display: flex; align-items: center; gap: .4rem; margin: 0 0 .15rem; font-size: .8125rem; cursor: pointer; }
+.ec-sally-opt.is-off { color: #8a97a8; cursor: default; }

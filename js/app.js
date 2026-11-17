@@ -151,13 +151,13 @@
     const w = work[pid];
     if (!w || w.closed_at) return { w: null, phase: 'none' };
     if (!w.status) return { w, phase: 'none' };
-    if (new Date(w.set_at).getTime() >= cutoff) return { w, phase: 'today' };
     if (w.status === 'da_chiamare') {
       // le chiamate fatte vengono ripulite alla chiusura successiva
       const calledSwept = w.called && w.called_at && new Date(w.called_at).getTime() < cutoff;
       return calledSwept ? { w: null, phase: 'none' } : { w, phase: 'call' };
     }
     if (UI.MGMT_STATUSES.includes(w.status)) return { w, phase: 'mgmt' };
+    if (new Date(w.set_at).getTime() >= cutoff) return { w, phase: 'today' };
     return (activeReport && w.report_id === activeReport.id) ? { w, phase: 'done' } : { w: null, phase: 'none' };
   }
   const effStatus = pid => (pid in pending ? pending[pid] : (workState(pid).w?.status || ''));
@@ -170,7 +170,10 @@
     for (const a of Object.values(assignments)) {
       if (a.is_manual) continue;
       const p = practiceById[a.practice_id];
-      if (p && workState(p.pratica_id).phase === 'today') baseQuotas[a.colleague_id] = (baseQuotas[a.colleague_id] || 0) + 1;
+      if (!p) continue;
+      const ws = workState(p.pratica_id);
+      const sentToday = (ws.phase === 'call' || ws.phase === 'mgmt') && new Date(ws.w.set_at).getTime() >= cutoff;
+      if (ws.phase === 'today' || sentToday) baseQuotas[a.colleague_id] = (baseQuotas[a.colleague_id] || 0) + 1;
     }
     return { lockedPids, baseQuotas };
   }
@@ -1062,7 +1065,7 @@
         <td class="ec-col-note">
           ${p.note ? `<div class="ec-src-note" title="Nota dal report: ${esc(p.note)}">${esc(p.note)}</div>` : ''}
           <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="note:${esc(pid)}"
-            value="${esc(w?.note || '')}" placeholder="Aggiungi nota…" maxlength="1000" autocomplete="off" ${off}
+            value="${esc(w?.note || '')}" placeholder="Scrivi qui la nota della pratica…" maxlength="1000" autocomplete="off" ${off}
             aria-label="Nota pratica ${esc(pid)}"
             onchange="App.saveNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
         </td>`;
@@ -1073,12 +1076,12 @@
     return `
       <tr data-pid="${esc(pid)}" data-st="${st}"
           class="${def ? 'has-st' : ''}${pid in pending ? ' is-pending' : ''}" ${def ? `style="--st:${def.hex}"` : ''}>
-        <td class="ec-col-id">${UI.praticaLink(pid)}</td>
-        ${cells}
         <td class="ec-col-status">
           <select class="form-select form-select-sm ec-status-select" data-fkey="st:${esc(pid)}" ${off}
             aria-label="Stato pratica ${esc(pid)}" onchange="App.setStatus(this)">${statusOptions(st)}</select>
         </td>
+        <td class="ec-col-id">${UI.praticaLink(pid)}</td>
+        ${cells}
       </tr>`;
   }
 
@@ -1145,16 +1148,16 @@
       <div class="ec-grid-wrap">
         <table class="ec-grid" data-colleague="${cid}">
           <thead><tr>
-            ${ColFilter.th('plan:' + colleagueId, 'pid', 'Pratica', 'ec-col-id')}
-            ${PLAN_COLS.map(([k, label]) => k === '__note' ? `<th>${label}</th>` : ColFilter.th('plan:' + colleagueId, k, label)).join('')}
             ${ColFilter.th('plan:' + colleagueId, 'stato', 'Stato', 'ec-col-status')}
+            ${ColFilter.th('plan:' + colleagueId, 'pid', 'Pratica', 'ec-col-id')}
+            ${PLAN_COLS.map(([k, label]) => k === '__note' ? '<th class="ec-th-note">Note pratica</th>' : ColFilter.th('plan:' + colleagueId, k, label)).join('')}
           </tr></thead>
           <tbody></tbody>
         </table>
       </div>
       <div class="card-footer text-muted small d-flex flex-wrap gap-3">
         <span data-plan-count></span>
-        <span class="ms-auto">Alle 19 le pratiche con uno stato lasciano il piano: Conforme e Richiesta integrazioni vengono eliminate dall'elenco e conteggiate nei rispettivi numeri; le altre passano ai rispettivi pool.</span>
+        <span class="ms-auto">Da chiamare, Audit, xFlat e Help passano subito ai rispettivi pool. Alle 19 Conforme e Richiesta integrazioni vengono eliminate dall'elenco e conteggiate nei rispettivi numeri.</span>
       </div>`
       : UI.emptyState(svg('<polyline points="20 6 9 17 4 12"/>', 40),
           activeReport ? 'Nessuna pratica da lavorare nel piano' : 'Nessun report attivo');
@@ -1184,14 +1187,23 @@
     const counts = { todo: 0 };
     for (const p of v.rows) { const s = effStatus(p.pratica_id || '') || 'todo'; counts[s] = (counts[s] || 0) + 1; }
 
+    // pratiche gia' inviate ai pool da questo collega
+    const sent = {};
+    for (const w of Object.values(work)) {
+      if (w.colleague_id !== card.dataset.plan || !w.status) continue;
+      const ph = workState(w.pratica_id).phase;
+      if (ph === 'call' || ph === 'mgmt') sent[w.status] = (sent[w.status] || 0) + 1;
+    }
+    const isPool = k => k === 'da_chiamare' || UI.MGMT_STATUSES.includes(k);
+
     const chip = (key, label, n, hex) => `
-      <button type="button" class="ec-chip ${f.st === key ? 'is-active' : ''}" data-chip="${key}" onclick="App.planChip(this)" aria-pressed="${f.st === key}">
+      <button type="button" class="ec-chip ${f.st === key ? 'is-active' : ''}" data-chip="${key}" ${isPool(key) ? 'data-pool="1" title="Pratiche inviate al pool"' : ''} onclick="App.planChip(this)" aria-pressed="${f.st === key}">
         ${hex ? `<span class="ec-st-dot" style="background:${hex}"></span>` : ''}${label} <strong>${fmt(n)}</strong>
       </button>`;
     box.innerHTML =
       chip('', 'Tutte', v.rows.length) +
       chip('todo', 'Da lavorare', counts.todo) +
-      Object.entries(UI.WORK_STATUSES).map(([k, s]) => chip(k, s.short, counts[k] || 0, s.hex)).join('') +
+      Object.entries(UI.WORK_STATUSES).map(([k, s]) => chip(k, s.short, isPool(k) ? (sent[k] || 0) : (counts[k] || 0), s.hex)).join('') +
       (ColFilter.active('plan:' + card.dataset.plan)
         ? '<button type="button" class="ec-chip ec-chip--clear" onclick="App.planClearCols(this)">✕ Cancella filtri colonne</button>' : '');
   }
@@ -1282,7 +1294,22 @@
   }
 
   // Aggiorna in place la riga di una pratica (niente ridisegno: non si perdono focus e menu aperti)
+  // La pratica e' passata in un pool: via dal piano di lavoro, aggiornati contatori e elenco "Da chiamare"
+  function leavePlan(pid) {
+    for (const cid of Object.keys(planView)) {
+      const v = planView[cid];
+      if (!v.rows.some(p => (p.pratica_id || '') === pid)) continue;
+      v.rows = v.rows.filter(p => (p.pratica_id || '') !== pid);
+      document.querySelectorAll('[data-plan]').forEach(card => {
+        if (card.dataset.plan === cid) { renderChips(card); renderPlanBody(card); }
+      });
+      renderPlanExtras(cid);
+    }
+    document.querySelectorAll('[data-plan]').forEach(renderChips);
+  }
   function patchRow(pid) {
+    const phase = workState(pid).phase;
+    if (phase === 'call' || phase === 'mgmt') { leavePlan(pid); return; }
     const st  = effStatus(pid);
     const def = UI.WORK_STATUSES[st];
     const w   = workState(pid).w;
@@ -1326,6 +1353,15 @@
     const card = btn.closest('[data-plan]');
     if (!card) return;
     const key = btn.dataset.chip || '';
+    if (btn.dataset.pool) {
+      // questi stati vivono nei pool: si apre il pool (o l'elenco "Da chiamare" sotto il piano)
+      if (canSeeAll) goPool(key);
+      else if (key === 'da_chiamare') {
+        const box = document.querySelector('[data-plan-call]');
+        if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      return;
+    }
     const f = planFilter[card.dataset.plan] || (planFilter[card.dataset.plan] = { q: '', st: '' });
     f.st = f.st === key ? '' : key;
     const v = planView[card.dataset.plan];
@@ -1407,6 +1443,8 @@
       if (row) work[pid] = row; else delete work[pid];
       patchRow(pid);
       refreshStatsSoon();
+      const ph = workState(pid).phase;
+      if (ph === 'call' || ph === 'mgmt') UI.toast(`Pratica ${pid} spostata nel pool ${POOL_LABELS[row.status] || ''}`.trim(), 'success');
 
       const mentioned = detectMentions(note, prev?.note);
       if (mentioned.length) {
@@ -1622,7 +1660,7 @@
     });
     const rows = ColFilter.apply('pool:' + poolTab, poolFiltered(items));
     const note = poolTab === 'assign' ? 'Pratiche non ancora assegnate a nessun collega'
-      : 'Le pratiche arrivano qui alle 19 del giorno in cui vengono segnalate';
+      : 'Le pratiche arrivano qui appena viene inserito lo stato';
 
     let body;
     if (!items.length) {

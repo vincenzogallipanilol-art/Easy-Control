@@ -462,6 +462,129 @@ const Admin = (() => {
     }
   }
 
+  // ── IMPORT LISTA AGENTI SALLY (con suggerimenti per nomi simili) ──── */
+  let _sallyPlan = [];
+  const nrm = s => String(s || '').toLowerCase().normalize('NFD').replace(/[^\x00-\x7f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const lc = s => String(s || '').toLowerCase().trim();
+
+  function lev(a, b) {
+    const m = a.length, n = b.length;
+    if (!m || !n) return Math.max(m, n);
+    let prev = Array.from({ length: n + 1 }, (_, j) => j);
+    for (let i = 1; i <= m; i++) {
+      const cur = [i];
+      for (let j = 1; j <= n; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+      prev = cur;
+    }
+    return prev[n];
+  }
+  const ratio = (a, b) => { const L = Math.max(a.length, b.length); return L ? 1 - lev(a, b) / L : 1; };
+
+  // Somiglianza tra due nomi normalizzati (0..1): ordine delle parole, iniziali, refusi
+  function nameScore(a, b) {
+    if (a === b) return 1;
+    const ta = a.split(' '), tb = b.split(' ');
+    let best = Math.max(ratio(a, b), ratio([...ta].sort().join(' '), [...tb].sort().join(' ')));
+    const [s, l] = ta.length <= tb.length ? [ta, tb] : [tb, ta];
+    let sum = 0;
+    for (const t of s) {
+      let m = 0;
+      for (const u of l) {
+        let v = t === u ? 1 : ((t.length === 1 || u.length === 1) && t[0] === u[0]) ? 0.9 : ratio(t, u);
+        if (v < 0.8) v = 0;
+        if (v > m) m = v;
+      }
+      sum += m;
+    }
+    return Math.max(best, (sum / s.length) * Math.sqrt(s.length / l.length));
+  }
+
+  function parseNames(text) {
+    let parts = String(text || '').split(/[\n;\t]+/).map(s => s.trim()).filter(Boolean);
+    if (parts.length === 1 && parts[0].includes(',')) parts = parts[0].split(',').map(s => s.trim()).filter(Boolean);
+    const seen = new Set();
+    return parts.filter(p => { const k = lc(p); if (seen.has(k)) return false; seen.add(k); return true; });
+  }
+
+  async function sallyAnalyze() {
+    const names = parseNames(document.getElementById('admin-sally-paste')?.value);
+    const box = document.getElementById('admin-sally-review');
+    if (!box) return;
+    if (!names.length) { box.innerHTML = ''; _sallyPlan = []; UI.toast('Incolla almeno un nome', 'warning'); return; }
+    let agents = [];
+    try { agents = await DB.getDistinctAgenti(); } catch (e) { /* senza report: nessun suggerimento */ }
+    const inList = new Set(_agentExclusions.map(x => lc(x.agent_name)));
+    _sallyPlan = names.map(name => {
+      const key = lc(name), n = nrm(name);
+      const exact = agents.filter(x => lc(x) === key);
+      const similar = agents.filter(x => lc(x) !== key)
+        .map(x => ({ value: x, score: nameScore(n, nrm(x)) }))
+        .filter(x => x.score >= 0.72).sort((p, q) => q.score - p.score).slice(0, 6);
+      const opts = [];
+      exact.forEach(x => opts.push({ value: x, kind: 'exact', checked: true }));
+      const strong = !exact.length && similar.length && similar[0].score >= 0.9;
+      if (!exact.length) opts.push({ value: name, kind: 'asis', checked: !strong });
+      similar.forEach((x, i) => opts.push({ value: x.value, kind: 'similar', score: x.score, checked: strong && i === 0 }));
+      opts.forEach(o => { o.inList = inList.has(lc(o.value)); if (o.inList) o.checked = false; });
+      return { name, found: exact.length > 0, opts };
+    });
+    renderSallyReview();
+  }
+
+  function renderSallyReview() {
+    const box = document.getElementById('admin-sally-review');
+    if (!box) return;
+    let i = 0;
+    const rows = _sallyPlan.map(item => {
+      const badge = item.found ? '<span class="badge bg-success-lt text-success">Nei report</span>'
+        : '<span class="badge bg-warning-lt text-warning">Non trovato nei report</span>';
+      const opts = item.opts.map(o => {
+        const id = i++;
+        const label = o.kind === 'asis' ? `Aggiungi come scritto: <strong>${UI.esc(o.value)}</strong>`
+          : o.kind === 'exact' ? `<strong>${UI.esc(o.value)}</strong>`
+          : `${UI.esc(o.value)} <span class="badge bg-azure-lt text-azure">simile ${Math.round(o.score * 100)}%</span>`;
+        return `<label class="ec-sally-opt${o.inList ? ' is-off' : ''}">
+          <input type="checkbox" data-sally="${id}" ${o.checked ? 'checked' : ''} ${o.inList ? 'disabled' : ''}/>
+          <span>${label}${o.inList ? ' <em>(già in lista)</em>' : ''}</span></label>`;
+      }).join('');
+      return `<tr><td class="text-nowrap">${UI.esc(item.name)}<div>${badge}</div></td><td>${opts}</td></tr>`;
+    }).join('');
+    box.innerHTML = `
+      <div class="table-responsive"><table class="table table-sm ec-sally-rev">
+        <thead><tr><th>Nome incollato</th><th>Nomi da aggiungere (spunta quelli giusti)</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>
+      <button class="btn btn-danger" onclick="Admin.sallyApply()">Aggiungi i nomi selezionati</button>
+      <button class="btn btn-ghost-secondary ms-2" onclick="Admin.sallyCancel()">Annulla</button>`;
+  }
+
+  function sallyCancel() {
+    _sallyPlan = [];
+    const box = document.getElementById('admin-sally-review');
+    if (box) box.innerHTML = '';
+  }
+
+  async function sallyApply() {
+    const flat = _sallyPlan.flatMap(x => x.opts);
+    const chosen = [];
+    const seen = new Set(_agentExclusions.map(x => lc(x.agent_name)));
+    document.querySelectorAll('#admin-sally-review input[data-sally]:checked').forEach(el => {
+      const o = flat[+el.dataset.sally];
+      if (o && !seen.has(lc(o.value))) { seen.add(lc(o.value)); chosen.push(o.value); }
+    });
+    if (!chosen.length) { UI.toast('Nessun nome selezionato', 'warning'); return; }
+    let ok = 0, fail = 0;
+    for (const n of chosen) {
+      try { await DB.addAgentExclusion(n); ok++; } catch (e) { fail++; }
+    }
+    _agentExclusions = await DB.getAgentExclusions();
+    renderAgentExclusions();
+    sallyCancel();
+    const ta = document.getElementById('admin-sally-paste');
+    if (ta) ta.value = '';
+    UI.toast(`${ok} agenti aggiunti${fail ? `, ${fail} non riusciti` : ''}`, fail ? 'warning' : 'success');
+  }
+
   // ── AGENTI SALLY (lista nomi agente) ────────────────── */
   function renderAgentExclusions() {
     const container = document.getElementById('admin-agent-exclusions-list');
@@ -512,6 +635,6 @@ const Admin = (() => {
     setSallyHook,
     setUserRole, setUserColleague, approveUser, rejectUser,
     impersonate: id => Auth.impersonate(id),
-    addAgentExclusion, removeAgentExclusion,
+    addAgentExclusion, removeAgentExclusion, sallyAnalyze, sallyApply, sallyCancel,
   };
 })();

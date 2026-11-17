@@ -316,6 +316,11 @@
                   placeholder="Nome agente Sally" />
                 <button class="btn btn-danger" onclick="Admin.addAgentExclusion()">Aggiungi</button>
               </div>
+              <label class="form-label">Incolla un elenco di nomi</label>
+              <textarea id="admin-sally-paste" class="form-control mb-2" rows="4" style="max-width:520px"
+                placeholder="Un nome per riga (oppure separati da punto e virgola)"></textarea>
+              <button class="btn btn-outline-primary mb-3" onclick="Admin.sallyAnalyze()">Verifica nomi</button>
+              <div id="admin-sally-review" class="mb-3"></div>
               <label class="form-label">Aggancia pool a un collega</label>
               <select id="admin-sally-hook" class="form-select" style="max-width:360px" onchange="Admin.setSallyHook(this.value)">
                 <option value="">Caricamento…</option>
