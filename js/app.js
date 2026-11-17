@@ -1337,7 +1337,9 @@
     if (v) v.limit = PLAN_PAGE;
     withFocus(() => renderPlanBody(card));
   }, 180);
-  function openModelli(pid) {
+  async function openModelli(pid) {
+    // la tabella di verifica puo' essere stata cambiata da un Admin: si rilegge sempre la configurazione
+    try { config = await DB.getConfig(); } catch (e) { /* si usa quella in memoria */ }
     Modelli.open({ practices: () => practices, pid, verifica: config.verifica_documenti, operator: (profile && profile.full_name) || colName(myColleagueId) || '' });
   }
   function planClearCols(btn) {
