@@ -61,6 +61,7 @@ const Admin = (() => {
       </tr>`).join('');
   }
 
+  let _modalSeq = 0;
   async function openColleagueModal(id) {
     const c = id ? _colleagues.find(x => x.id === id) : null;
     const modal = document.getElementById('modal-colleague');
@@ -82,38 +83,40 @@ const Admin = (() => {
     document.getElementById('modal-colleague-title').textContent = c ? `Collega — ${c.name}` : 'Nuovo collega';
     document.getElementById('btn-delete-colleague').style.display = c ? '' : 'none';
 
-    // Carica (se serve) la lista distinct tipologie
-    if (!_tipologieList.length) {
-      try { _tipologieList = await DB.getDistinctTipologie(); } catch(e) { /* non bloccante */ }
-    }
-    // Includi eventuali tipologie già assegnate ma non più presenti nelle pratiche correnti
-    const extra = new Set([..._modalPrimary, ..._modalSecondary]);
-    const fullList = Array.from(new Set([..._tipologieList, ...extra])).sort((a,b) => a.localeCompare(b,'it'));
-    renderModalTipologie(fullList);
-
-    // Filtri stato di questo collega (default: tutti inclusi, modalità 'empty')
+    // Filtri stato di default (tutti inclusi): il modal si apre subito, il resto arriva in background
     _modalFilters = {};
     for (const stato of _canonicalStates) {
       _modalFilters[stato] = { stato, included: true, note_mode: 'empty', conf_mode: 'empty' };
     }
-    if (id) {
-      try {
-        const rows = await DB.getColleagueStateFilters(id);
-        for (const r of rows) _modalFilters[r.stato] = { stato: r.stato, included: r.included, note_mode: r.note_mode, conf_mode: r.conf_mode };
-      } catch(e) { /* non bloccante */ }
+    const seq = ++_modalSeq;
+    const fillTipologie = () => {
+      const extra = new Set([..._modalPrimary, ..._modalSecondary]);
+      renderModalTipologie(Array.from(new Set([..._tipologieList, ...extra])).sort((a, b) => a.localeCompare(b, 'it')));
+    };
+    if (_tipologieList.length) fillTipologie();
+    else {
+      const msg = '<span class="text-muted small">Caricamento…</span>';
+      document.getElementById('col-primary-list').innerHTML = msg;
+      document.getElementById('col-secondary-list').innerHTML = msg;
     }
     renderModalFilters();
-
-    // Agenti esclusi per questo collega (+ suggerimenti dagli agenti del report attivo)
     renderModalExcluded();
-    if (!_agentiList.length) {
-      try { _agentiList = await DB.getDistinctAgenti(); } catch(e) { /* non bloccante */ }
-    }
     const dl = document.getElementById('col-agents-datalist');
-    if (dl) dl.innerHTML = _agentiList.map(a => `<option value="${UI.esc(a)}"></option>`).join('');
+    const fillAgenti = () => { if (dl) dl.innerHTML = _agentiList.map(a => `<option value="${UI.esc(a)}"></option>`).join(''); };
+    fillAgenti();
 
-    const bsModal = bootstrap.Modal.getOrCreateInstance(modal);
-    bsModal.show();
+    bootstrap.Modal.getOrCreateInstance(modal).show();
+
+    // Dati pesanti in parallelo, senza bloccare l'apertura
+    const jobs = [];
+    if (!_tipologieList.length) jobs.push(DB.getDistinctTipologie().then(l => { _tipologieList = l; if (seq === _modalSeq) fillTipologie(); }).catch(() => {}));
+    if (!_agentiList.length) jobs.push(DB.getDistinctAgenti().then(l => { _agentiList = l; if (seq === _modalSeq) fillAgenti(); }).catch(() => {}));
+    if (id) jobs.push(DB.getColleagueStateFilters(id).then(rows => {
+      if (seq !== _modalSeq) return;
+      for (const r of rows) _modalFilters[r.stato] = { stato: r.stato, included: r.included, note_mode: r.note_mode, conf_mode: r.conf_mode };
+      renderModalFilters();
+    }).catch(() => {}));
+    await Promise.all(jobs);
   }
 
   function renderModalTipologie(list) {

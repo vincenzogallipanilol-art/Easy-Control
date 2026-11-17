@@ -305,7 +305,26 @@
   });
 
   // ── 5. Caricamento dati ────────────────────────────────────────────
+  // Una pratica (stesso pratica_id) esiste una sola volta: se il report ne contiene piu' righe
+  // si tiene quella gia' assegnata (altrimenti la prima), cosi' non puo' andare a piu' persone.
+  function dedupePractices() {
+    const seen = new Map(); let dup = false;
+    for (const p of practices) {
+      const k = p.pratica_id;
+      if (!k) continue;
+      const cur = seen.get(k);
+      if (!cur) seen.set(k, p);
+      else { dup = true; if (!assignments[cur.id] && assignments[p.id]) seen.set(k, p); }
+    }
+    if (!dup) return;
+    const keep = new Set(seen.values());
+    practices = practices.filter(p => !p.pratica_id || keep.has(p));
+    const ids = new Set(practices.map(p => p.id));
+    for (const id of Object.keys(assignments)) if (!ids.has(id)) delete assignments[id];
+  }
+
   function indexPractices() {
+    dedupePractices();
     practiceById = {}; practiceByPid = {};
     for (const p of practices) {
       practiceById[p.id] = p;
@@ -605,7 +624,11 @@
       const kept = rows.filter(o => !isExcludedState(o.stato_attuale));
       const excluded = total - kept.length;
       if (!kept.length) throw new Error('Tutte le pratiche del file sono in stati esclusi: nessuna da caricare');
-      rows.length = 0; rows.push(...kept);
+      // Stessa pratica ripetuta nel file: si tiene la prima riga
+      const seenIds = new Set(); const uniq = [];
+      for (const o of kept) { if (!seenIds.has(o.pratica_id)) { seenIds.add(o.pratica_id); uniq.push(o); } }
+      const dupes = kept.length - uniq.length;
+      rows.length = 0; rows.push(...uniq);
       // ID generati qui: dopo l'inserimento non serve riscaricare le pratiche
       const localIds = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function';
       if (localIds) rows.forEach(r => { r.id = crypto.randomUUID(); });
@@ -635,7 +658,7 @@
         }
       }
 
-      UI.toast(`Report caricato: ${fmt(rows.length)} pratiche${excluded ? ` (${fmt(excluded)} escluse per stato)` : ''}, ${fmt(autoAssignments.length)} assegnate`, 'success');
+      UI.toast(`Report caricato: ${fmt(rows.length)} pratiche${excluded ? ` (${fmt(excluded)} escluse per stato)` : ''}${dupes ? `, ${fmt(dupes)} duplicate ignorate` : ''}, ${fmt(autoAssignments.length)} assegnate`, 'success');
     } catch (e) {
       UI.toast('Errore upload: ' + e.message, 'danger');
     } finally {
@@ -1969,6 +1992,7 @@
 
   // Funzioni richiamate dagli handler inline
   window.App = window.AppRuntime = {
+    getPractices: () => practices,
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
     setCalled, setPoolNote, closePoolRow,
     openScheda, backToDashboard, setPeriod, goPool, goMine,

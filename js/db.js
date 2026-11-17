@@ -198,14 +198,18 @@ const DB = (() => {
   // Valori distinti per tipologia/agente: un solo scarico per report, poi in cache
   let _distinctCache = null; // { reportId, promise }
   async function getDistinct(column) {
-    const report = await getActiveReport();
-    if (!report) return [];
-    if (!_distinctCache || _distinctCache.reportId !== report.id) {
-      const promise = fetchAll(() => db.from('practices').select('id,tipologia,agente_attuale').eq('report_id', report.id))
-        .catch(e => { _distinctCache = null; throw e; });
-      _distinctCache = { reportId: report.id, promise };
+    // Pratiche gia' in memoria nell'app: nessuno scarico
+    let rows = window.App && window.App.getPractices ? window.App.getPractices() : null;
+    if (!rows || !rows.length) {
+      const report = await getActiveReport();
+      if (!report) return [];
+      if (!_distinctCache || _distinctCache.reportId !== report.id) {
+        const promise = fetchAll(() => db.from('practices').select('id,tipologia,agente_attuale').eq('report_id', report.id))
+          .catch(e => { _distinctCache = null; throw e; });
+        _distinctCache = { reportId: report.id, promise };
+      }
+      rows = await _distinctCache.promise;
     }
-    const rows = await _distinctCache.promise;
     const set = new Set();
     for (const r of rows) {
       const t = (r[column] || '').trim();
