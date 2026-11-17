@@ -575,3 +575,57 @@ th.ec-cf.is-desc .ec-cf-label::after { content: ' \2193'; color: #206bc4; }
 .ec-cf-n { color: #8a97a8; font-variant-numeric: tabular-nums; font-size: .75rem; }
 .ec-cf-more { padding: .35rem .25rem; color: #8a97a8; font-size: .75rem; }
 .ec-cf-foot { display: flex; align-items: center; gap: .5rem; padding-top: .5rem; border-top: 1px solid #eef1f5; }
+
+/* ── MODELLI (popup) ─────────────────────────────────────────────── */
+.ec-btn-modelli { border: 1px solid #dce1e7; background: #fff; font-weight: 500; white-space: nowrap; }
+.ec-btn-modelli:hover { background: #f6f8fb; border-color: #206bc4; color: #206bc4; }
+.ec-modal { position: fixed; inset: 0; z-index: 1900; display: flex; align-items: center; justify-content: center; padding: 1rem; background: rgba(24, 36, 51, .5); }
+.ec-modal-box { display: flex; flex-direction: column; width: min(1180px, 100%); height: min(88vh, 800px); background: #fff; border-radius: 10px; box-shadow: 0 16px 48px rgba(24, 36, 51, .35); overflow: hidden; }
+.ec-modal-head { display: flex; align-items: center; gap: 1rem; padding: .75rem 1rem; border-bottom: 1px solid #eef1f5; }
+.ec-modal-title { margin: 0; font-size: 1.05rem; }
+.ec-mod-pratica { position: relative; flex: 1; max-width: 520px; }
+.ec-mod-chosen { display: inline-flex; align-items: center; gap: .5rem; padding: .25rem .6rem; background: #e9f0f9; border-radius: 6px; font-size: .8125rem; }
+.ec-mod-chosen button { border: 0; background: transparent; cursor: pointer; color: #667382; padding: 0 .1rem; }
+.ec-mod-results { position: absolute; left: 0; right: 0; top: 100%; z-index: 5; background: #fff; border: 1px solid #dce1e7; border-radius: 6px; box-shadow: 0 8px 24px rgba(24, 36, 51, .15); }
+.ec-mod-results:empty { display: none; }
+.ec-mod-results button { display: block; width: 100%; text-align: left; padding: .4rem .6rem; border: 0; background: transparent; font-size: .8125rem; cursor: pointer; }
+.ec-mod-results button:hover { background: #f6f8fb; }
+.ec-mod-none { padding: .5rem .6rem; color: #8a97a8; font-size: .8125rem; }
+.ec-modal-head .btn-close { margin-left: auto; }
+.ec-modal-tabs { display: flex; gap: .25rem; padding: 0 1rem; border-bottom: 1px solid #eef1f5; }
+.ec-modal-tabs button { padding: .6rem .9rem; border: 0; border-bottom: 2px solid transparent; background: transparent; font-weight: 500; color: #667382; cursor: pointer; }
+.ec-modal-tabs button.is-on { color: #206bc4; border-bottom-color: #206bc4; }
+.ec-modal-body { flex: 1; min-height: 0; }
+.ec-mod-cols { display: flex; height: 100%; }
+.ec-mod-side { width: 270px; flex: none; overflow: auto; padding: .75rem; border-right: 1px solid #eef1f5; background: #fafbfd; }
+.ec-mod-side--wide { width: 52%; }
+.ec-mod-main { flex: 1; min-width: 0; overflow: auto; padding: .75rem 1rem; display: flex; flex-direction: column; gap: .5rem; }
+.ec-mod-group, .ec-mod-sec { margin: .6rem 0 .3rem; font-size: .6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: #667382; }
+.ec-mod-group:first-child, .ec-mod-sec:first-child { margin-top: 0; }
+.ec-mod-tpl { display: block; width: 100%; text-align: left; padding: .4rem .6rem; margin-bottom: 2px; border: 0; border-radius: 6px; background: transparent; font-size: .8125rem; cursor: pointer; }
+.ec-mod-tpl:hover { background: #eef2f8; }
+.ec-mod-tpl.is-on { background: #e0ecfb; color: #206bc4; font-weight: 600; }
+.ec-mod-text { flex: 1; min-height: 260px; resize: none; font-size: .875rem; line-height: 1.5; }
+.ec-mod-actions { display: flex; align-items: center; gap: .5rem; }
+.ec-mod-chk { display: flex; align-items: flex-start; gap: .5rem; margin: 0 0 .25rem; font-size: .8125rem; cursor: pointer; }
+.ec-mod-chk input { margin-top: .2rem; }
+.ec-mod-docs { display: flex; flex-wrap: wrap; gap: .3rem; }
+.ec-mod-doc { padding: .2rem .55rem; border: 1px solid #dce1e7; border-radius: 999px; background: #fff; font-size: .75rem; cursor: pointer; }
+.ec-mod-doc:hover { border-color: #206bc4; }
+.ec-mod-doc.is-on { background: #206bc4; border-color: #206bc4; color: #fff; }
+.ec-mod-mat { width: 100%; font-size: .75rem; border-collapse: collapse; background: #fff; }
+.ec-mod-mat th, .ec-mod-mat td { padding: .25rem .4rem; border-bottom: 1px solid #eef1f5; }
+.ec-mod-mat th { color: #667382; font-weight: 600; text-align: center; }
+.ec-mod-mat th:first-child { text-align: left; }
+.ec-mod-mg td { background: #f1f4f8; font-weight: 600; color: #667382; text-transform: uppercase; font-size: .6875rem; letter-spacing: .04em; }
+.ec-mod-items { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .3rem; }
+.ec-mod-items li { display: flex; align-items: center; gap: .5rem; padding: .3rem .5rem; border: 1px solid #dce1e7; border-radius: 6px; background: #fff; font-size: .8125rem; cursor: grab; }
+.ec-mod-items li:active { cursor: grabbing; }
+.ec-mod-items li.ec-mod-empty { color: #8a97a8; border-style: dashed; cursor: default; }
+.ec-mod-grip { color: #9aa7b7; }
+.ec-mod-it { flex: 1; min-width: 0; }
+.ec-mod-items li button { border: 0; background: transparent; color: #667382; cursor: pointer; padding: 0 .25rem; }
+.ec-mod-items li button:hover { color: #206bc4; }
+.ec-mod-subj { padding: .35rem .6rem; background: #f6f8fb; border-radius: 6px; font-size: .8125rem; }
+.ec-mod-preview { margin: 0; padding: .75rem; color: #182433; background: #f6f8fb; border-radius: 6px; font-family: inherit; font-size: .8125rem; line-height: 1.5; white-space: pre-wrap; flex: 1; min-height: 140px; overflow: auto; }
+@media (max-width: 800px) { .ec-mod-cols { flex-direction: column; overflow: auto; } .ec-mod-side, .ec-mod-side--wide { width: 100%; max-height: 45%; border-right: 0; } }

@@ -1165,6 +1165,7 @@
           <div class="ec-chips" data-plan-chips></div>
           <div class="ms-auto d-flex align-items-center gap-3">
             <small class="text-muted d-none d-xxl-inline">Scrivi @nome nella nota per taggare un collega</small>
+            <button type="button" class="btn btn-sm ec-btn-modelli" onclick="App.openModelli()">Modelli</button>
             <input type="search" class="form-control form-control-sm ec-plan-search" data-fkey="plansearch:${cid}"
               placeholder="Cerca pratica, nome, agente…" value="${esc(f.q)}" aria-label="Cerca nel piano" oninput="App.planSearch(this)"/>
           </div>
@@ -1309,6 +1310,9 @@
     if (v) v.limit = PLAN_PAGE;
     withFocus(() => renderPlanBody(card));
   }, 180);
+  function openModelli(pid) {
+    Modelli.open({ practices: () => practices, pid, operator: (profile && profile.full_name) || colName(myColleagueId) || '' });
+  }
   function planClearCols(btn) {
     const card = btn.closest('[data-plan]');
     if (!card) return;
@@ -1637,6 +1641,7 @@
         <div class="card-header ec-plan-toolbar">
           <div class="ec-chips">${tabs}</div>
           <small class="text-muted ms-auto">${note}${items.length ? ` · ${rows.length === items.length ? fmt(items.length) : fmt(rows.length) + ' di ' + fmt(items.length)} pratiche` : ''}</small>
+          <button type="button" class="btn btn-sm ec-btn-modelli" onclick="App.openModelli()">Modelli</button>
         </div>
         ${items.length ? poolFiltersHtml(items) : ''}
         ${body}
@@ -1924,7 +1929,7 @@
 
   // Funzioni richiamate dagli handler inline
   window.App = window.AppRuntime = {
-    setStatus, saveNote, planSearch, planChip, planClearCols, planMore, setSeriesDays, setSeriesMode,
+    setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
     setCalled, setPoolNote, closePoolRow,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, filterPool, showAllPool, poolSet, poolReset,
