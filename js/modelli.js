@@ -21,26 +21,23 @@ const Modelli = (() => {
     {"g": "Nuovi", "t": "Kit affida (nuovi)", "x": "Buon pomeriggio\na seguito di controllo documentale mi sento di dover far luce sulla composizione del kit affida in Completo.\ni moduli che lo compongono sono i seguenti:\nContratto di mediazione(vedo allegato giustamente alla presente)\nDCM / Dichiarazione compenso di mediazione(allegato alla presente ma senza data)\nPrivacy(Vedo allegata in EGG)\nAdeguata verifica (Assente)\nScheda di valutazione del rischio(assente)\nDichiarazioni cliente e certificazioni collaboratore(assente)\nModulo POG (Assente)\nModulo Polizze(ove presenti)"}
   ];
 
-  // Documenti segnalabili con un clic (voci singole)
-  const CHIPS = [
-    'Adeguata Verifica assente', 'Adeguata Verifica 2 pag non compilata', 'Anagrafici intestatario assenti',
-    'Dichiarazione aggiuntiva prestiti 1° Intestatario assente', 'Dichiarazione compenso di mediazione assente',
-    'Dichiarazioni cliente e certificazioni collaboratore assente', 'Dichiarazioni cliente e certificazioni collaboratore istituto diverso',
-    'Documenti Anagrafici assenti', 'Mandato Kit affida assente', 'Mod.Bancaria assente', 'Modulo TEG assente',
-    'Permesso di soggiorno assente', 'PIES assente', 'PLICO assente', 'POG assente', 'Privacy kit affida assente',
-    'Tessera sanitaria assente', 'Reddituali intestatario assenti', 'Scheda di valutazione del rischio assente',
-    'Contratto con istituto in cui si evince compenso di mediazione',
-  ];
-
-  // Tabella di verifica: documento x soggetto (si spunta ciò che manca)
-  const PERSONS = ['1° Intestatario', '2° Intestatario', '1° Garante', '2° Garante'];
-  const MATRIX = [
-    { g: 'Kit affida', d: ['Contratto di Mediazione', 'Adeguata Verifica', 'Dichiarazioni cliente e certificazioni collaboratore', 'Scheda di valutazione del rischio', 'Privacy', 'POG', 'Polizze (ove presenti)'] },
-    { g: 'Mutui', d: ['Dichiarazione compenso di mediazione', 'PIES (dopo stipula)'] },
-    { g: 'Prestiti Personali', d: ['Dichiarazioni Aggiuntive Prestiti'] },
-    { g: 'Aziende', d: ['Modulo TEG', 'Visura Camerale'] },
-  ];
-  const MDOCS = MATRIX.flatMap(m => m.d);
+  // Tabella di verifica: documento x soggetto (si spunta ciò che manca). Configurabile da Admin.
+  const DEFAULT_VERIFICA = {
+    persons: ['1° Intestatario', '2° Intestatario', '1° Garante', '2° Garante'],
+    groups: [
+      { g: 'Kit affida', d: ['Contratto di Mediazione', 'Adeguata Verifica', 'Dichiarazioni cliente e certificazioni collaboratore', 'Scheda di valutazione del rischio', 'Privacy', 'POG', 'Polizze (ove presenti)'] },
+      { g: 'Mutui', d: ['Dichiarazione compenso di mediazione', 'PIES (dopo stipula)'] },
+      { g: 'Prestiti Personali', d: ['Dichiarazioni Aggiuntive Prestiti'] },
+      { g: 'Aziende', d: ['Modulo TEG', 'Visura Camerale'] },
+    ],
+  };
+  let PERSONS = DEFAULT_VERIFICA.persons, MATRIX = DEFAULT_VERIFICA.groups, MDOCS = MATRIX.flatMap(m => m.d);
+  function setVerifica(v) {
+    const ok = v && Array.isArray(v.persons) && v.persons.length && Array.isArray(v.groups) && v.groups.length;
+    PERSONS = ok ? v.persons : DEFAULT_VERIFICA.persons;
+    MATRIX = ok ? v.groups : DEFAULT_VERIFICA.groups;
+    MDOCS = MATRIX.flatMap(g => g.d);
+  }
 
   const INTRO = [
     ['hello', 'Buongiorno,'],
@@ -72,8 +69,7 @@ const Modelli = (() => {
 
   function newState() {
     return {
-      tab: 'modelli', pratica: null, results: [], tpl: 0, tplText: null,
-      on: { hello: true, intro: true, wait: true, upload: true, thanks: true, sign: true, kit: false },
+      tab: 'modelli', pratica: null, results: [], tpl: 0, tplText: null, preview: null,
       items: [], mat: {}, free: {}, nfree: 0,
     };
   }
@@ -81,20 +77,19 @@ const Modelli = (() => {
   // ── Composizione "Richiesta integrazione" ───────────────────────────
   function itemText(key) {
     const [k, i] = key.split(':');
-    if (k === 'c') return CHIPS[+i];
     if (k === 'm') return `${MDOCS[+i]} assente (${[...S.mat[i]].sort().map(n => PERSONS[n]).join(', ')})`;
     return S.free[i] || '';
   }
   function compose() {
-    const lines = l => l.filter(([k]) => S.on[k]).map(([, t]) => t);
-    const parts = [];
-    const intro = lines(INTRO); if (intro.length) parts.push(intro.join('\n'));
+    const join = l => l.map(([, t]) => t).join('\n');
+    const parts = [join(INTRO)];
     if (S.items.length) parts.push(S.items.map(k => '- ' + itemText(k)).join('\n'));
-    if (S.on.kit) parts.push(fill(TEMPLATES.find(t => t.g === 'Nuovi').x));
-    const a = lines(CLOSE_A); if (a.length) parts.push(a.join('\n'));
-    const b = lines(CLOSE_B); if (b.length) parts.push(b.join('\n'));
+    parts.push(join(CLOSE_A));
+    parts.push(join(CLOSE_B) + '\n' + fill('{{operatore}}'));
     return parts.join('\n\n');
   }
+  // Rigenera l'anteprima dalle voci selezionate e ridisegna
+  function refresh() { S.preview = compose(); renderBody(); }
   function subject() {
     return fill('Integrazioni pratica {{pratica}} - {{cognome}} {{nome}}');
   }
@@ -125,22 +120,21 @@ const Modelli = (() => {
           <div class="ec-mod-actions">
             <small class="text-muted me-auto">I campi tra [PARENTESI] vanno completati a mano. Il testo è modificabile prima di copiarlo.</small>
             <button type="button" class="btn btn-sm" data-act="reset">Ripristina</button>
-            <button type="button" class="btn btn-sm btn-primary" data-act="copy-tpl">Copia testo</button>
+            <button type="button" class="btn btn-orange btn-lg" data-act="copy-tpl">Copia testo</button>
           </div>
         </div>
       </div>`;
   }
 
   function integrazioneTab() {
-    const chk = (k, t) => `<label class="ec-mod-chk"><input type="checkbox" data-on="${k}" ${S.on[k] ? 'checked' : ''}/> <span>${esc(t)}</span></label>`;
-    const chips = CHIPS.map((c, i) => `<button type="button" class="ec-mod-doc${S.items.includes('c:' + i) ? ' is-on' : ''}" data-act="chip" data-i="${i}">${esc(c)}</button>`).join('');
+    let idx = 0;
     const matrix = MATRIX.map(m => {
       const rows = m.d.map(d => {
-        const i = MDOCS.indexOf(d);
+        const i = idx++;
         return `<tr><td>${esc(d)}</td>${PERSONS.map((_, n) =>
           `<td class="text-center"><input type="checkbox" data-mat="${i}:${n}" ${S.mat[i] && S.mat[i].has(n) ? 'checked' : ''} aria-label="${esc(d)} - ${esc(PERSONS[n])}"/></td>`).join('')}</tr>`;
       }).join('');
-      return `<tr class="ec-mod-mg"><td colspan="5">${esc(m.g)}</td></tr>${rows}`;
+      return `<tr class="ec-mod-mg"><td colspan="${PERSONS.length + 1}">${esc(m.g)}</td></tr>${rows}`;
     }).join('');
     const items = S.items.length ? S.items.map((k, n) => `
       <li draggable="true" data-n="${n}">
@@ -148,19 +142,15 @@ const Modelli = (() => {
         <button type="button" data-act="up" data-n="${n}" aria-label="Su">↑</button>
         <button type="button" data-act="down" data-n="${n}" aria-label="Giù">↓</button>
         <button type="button" data-act="del" data-n="${n}" aria-label="Rimuovi">✕</button>
-      </li>`).join('') : '<li class="ec-mod-empty">Seleziona i documenti mancanti a sinistra</li>';
+      </li>`).join('') : '<li class="ec-mod-empty">Spunta a sinistra i documenti mancanti</li>';
     return `
       <div class="ec-mod-cols">
         <div class="ec-mod-side ec-mod-side--wide">
-          <div class="ec-mod-sec">Apertura</div>${INTRO.map(([k, t]) => chk(k, t)).join('')}
-          <div class="ec-mod-sec">Documenti mancanti (clic per aggiungere)</div><div class="ec-mod-docs">${chips}</div>
           <div class="ec-mod-sec">Verifica per intestatario / garante (spunta ciò che manca)</div>
-          <table class="ec-mod-mat"><thead><tr><th>Documento</th>${PERSONS.map(p => `<th>${esc(p.replace(' ', '\u00a0'))}</th>`).join('')}</tr></thead><tbody>${matrix}</tbody></table>
+          <table class="ec-mod-mat"><thead><tr><th>Documento</th>${PERSONS.map(p => `<th>${esc(p)}</th>`).join('')}</tr></thead><tbody>${matrix}</tbody></table>
           <div class="ec-mod-sec">Altra voce</div>
           <div class="d-flex gap-2"><input type="text" class="form-control form-control-sm" data-role="free" placeholder="Scrivi una voce e premi Invio" maxlength="300"/>
             <button type="button" class="btn btn-sm" data-act="addfree">Aggiungi</button></div>
-          <div class="ec-mod-sec">Chiusura</div>
-          ${chk('kit', 'Spiegazione composizione kit affida (nuovi)')}${CLOSE_A.concat(CLOSE_B).map(([k, t]) => chk(k, t)).join('')}
         </div>
         <div class="ec-mod-main">
           <div class="ec-mod-sec">Voci segnalate — trascina per riordinare</div>
@@ -168,10 +158,10 @@ const Modelli = (() => {
           <div class="ec-mod-sec d-flex align-items-center">Oggetto
             <button type="button" class="btn btn-sm ms-auto" data-act="copy-subj">Copia oggetto</button></div>
           <div class="ec-mod-subj">${esc(subject())}</div>
-          <div class="ec-mod-sec">Anteprima</div>
-          <pre class="ec-mod-preview" data-role="preview">${esc(compose())}</pre>
+          <div class="ec-mod-sec">Anteprima (modificabile: se cambi le voci viene rigenerata)</div>
+          <textarea class="form-control ec-mod-preview" data-role="preview" spellcheck="false" aria-label="Anteprima">${esc(S.preview == null ? compose() : S.preview)}</textarea>
           <div class="ec-mod-actions"><button type="button" class="btn btn-sm" data-act="clearall">Svuota</button>
-            <button type="button" class="btn btn-sm btn-primary ms-auto" data-act="copy-int">Copia testo</button></div>
+            <button type="button" class="btn btn-orange btn-lg ms-auto" data-act="copy-int">Copia anteprima</button></div>
         </div>
       </div>`;
   }
@@ -231,7 +221,7 @@ const Modelli = (() => {
     const id = 'x:' + (++S.nfree);
     S.free[S.nfree] = t;
     S.items.push(id);
-    renderBody();
+    refresh();
     const again = root.querySelector('[data-role="free"]');
     if (again) again.focus();
   }
@@ -239,7 +229,7 @@ const Modelli = (() => {
   function onClick(e) {
     const t = e.target.closest('[data-act], [data-tab]');
     if (!t) return;
-    if (t.dataset.tab) { S.tab = t.dataset.tab; render(); return; }
+    if (t.dataset.tab) { S.tab = t.dataset.tab; if (S.preview == null) S.preview = compose(); render(); return; }
     const a = t.dataset.act, i = +t.dataset.i, n = +t.dataset.n;
     switch (a) {
       case 'close': close(); break;
@@ -248,38 +238,37 @@ const Modelli = (() => {
       case 'tpl': S.tpl = i; S.tplText = null; renderBody(); break;
       case 'reset': S.tplText = null; renderBody(); break;
       case 'copy-tpl': copy(root.querySelector('[data-role="tpltext"]').value); break;
-      case 'chip': toggleItem('c:' + i, !S.items.includes('c:' + i)); renderBody(); break;
-      case 'up': move(n, -1); renderBody(); break;
-      case 'down': move(n, 1); renderBody(); break;
+      case 'up': move(n, -1); refresh(); break;
+      case 'down': move(n, 1); refresh(); break;
       case 'del': {
         const k = S.items[n];
         S.items.splice(n, 1);
         if (k.startsWith('m:')) delete S.mat[k.slice(2)];
-        renderBody(); break;
+        refresh(); break;
       }
       case 'addfree': addFree(); break;
-      case 'clearall': S.items = []; S.mat = {}; S.free = {}; renderBody(); break;
+      case 'clearall': S.items = []; S.mat = {}; S.free = {}; refresh(); break;
       case 'copy-subj': copy(subject(), 'Oggetto'); break;
-      case 'copy-int': copy(compose()); break;
+      case 'copy-int': copy(root.querySelector('[data-role="preview"]').value); break;
     }
   }
 
   function onChange(e) {
     const el = e.target;
-    if (el.dataset.on) { S.on[el.dataset.on] = el.checked; renderBody(); return; }
     if (el.dataset.mat) {
       const [i, n] = el.dataset.mat.split(':').map(Number);
       const set = S.mat[i] || (S.mat[i] = new Set());
       if (el.checked) set.add(n); else set.delete(n);
       toggleItem('m:' + i, set.size > 0);
       if (!set.size) delete S.mat[i];
-      renderBody();
+      refresh();
     }
   }
 
   function onInput(e) {
     if (e.target.dataset.role === 'search') search(e.target.value);
     else if (e.target.dataset.role === 'tpltext') S.tplText = e.target.value;
+    else if (e.target.dataset.role === 'preview') S.preview = e.target.value;
   }
 
   // Trascinamento delle voci
@@ -293,7 +282,7 @@ const Modelli = (() => {
     const to = +li.dataset.n;
     if (to !== dragFrom) S.items.splice(to, 0, S.items.splice(dragFrom, 1)[0]);
     dragFrom = null;
-    renderBody();
+    refresh();
   }
 
   function onKey(e) {
@@ -312,6 +301,7 @@ const Modelli = (() => {
     close();
     opts = Object.assign({ practices: () => [], operator: '' }, o || {});
     opts.returnFocus = document.activeElement;
+    setVerifica(opts.verifica);
     S = newState();
     if (opts.pid) S.pratica = opts.practices().find(p => p.pratica_id === opts.pid) || null;
     root = document.createElement('div');
@@ -343,5 +333,5 @@ const Modelli = (() => {
     if (s) s.focus();
   }
 
-  return { open, close };
+  return { open, close, defaults: () => JSON.parse(JSON.stringify(DEFAULT_VERIFICA)) };
 })();

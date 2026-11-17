@@ -34,6 +34,7 @@ const Admin = (() => {
     renderAgentExclusions();
     renderSallyHook();
     await renderWorkingDays();
+    renderVerifica();
   }
 
   // ── COLLEGHI ─────────────────────────────── */
@@ -281,6 +282,56 @@ const Admin = (() => {
     UI.toast('Giorni lavorativi salvati', 'success');
   }
 
+  // ── TABELLA VERIFICA DOCUMENTI (popup Modelli) ─────────── */
+  function renderVerifica() {
+    const v = _config.verifica_documenti || Modelli.defaults();
+    const p = document.getElementById('admin-verifica-persons');
+    const d = document.getElementById('admin-verifica-docs');
+    if (p) p.value = (v.persons || []).join('\n');
+    if (d) d.value = (v.groups || []).map(g => `[${g.g}]\n${(g.d || []).join('\n')}`).join('\n\n');
+  }
+
+  function parseVerifica() {
+    const persons = document.getElementById('admin-verifica-persons').value.split('\n').map(s => s.trim()).filter(Boolean);
+    const groups = [];
+    let cur = null;
+    for (const raw of document.getElementById('admin-verifica-docs').value.split('\n')) {
+      const line = raw.trim();
+      if (!line) continue;
+      const m = line.match(/^\[(.+)\]$/);
+      if (m) { cur = { g: m[1].trim(), d: [] }; groups.push(cur); }
+      else {
+        if (!cur) { cur = { g: 'Documenti', d: [] }; groups.push(cur); }
+        cur.d.push(line);
+      }
+    }
+    return { persons, groups: groups.filter(g => g.d.length) };
+  }
+
+  async function saveVerifica() {
+    const v = parseVerifica();
+    if (!v.persons.length || !v.groups.length) { UI.toast('Servono almeno una colonna e un documento', 'warning'); return; }
+    try {
+      await DB.setConfig('verifica_documenti', v);
+      _config.verifica_documenti = v;
+      renderVerifica();
+      UI.toast('Tabella verifica salvata', 'success');
+    } catch (e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  async function resetVerifica() {
+    try {
+      await DB.setConfig('verifica_documenti', null);
+      delete _config.verifica_documenti;
+      renderVerifica();
+      UI.toast('Tabella verifica ripristinata', 'success');
+    } catch (e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
   // ── AGENTI SALLY (pool agganciabile a un collega) ─────────── */
   function renderSallyHook() {
     const sel = document.getElementById('admin-sally-hook');
@@ -457,7 +508,7 @@ const Admin = (() => {
     openColleagueModal, saveColleague, deleteColleague,
     toggleModalTipologia, toggleModalFilterIncluded, cycleModalFilterMode,
     addModalExcludedAgent, removeModalExcludedAgent,
-    saveWorkingDays, renderWorkingDays,
+    saveWorkingDays, renderWorkingDays, saveVerifica, resetVerifica,
     setSallyHook,
     setUserRole, setUserColleague, approveUser, rejectUser,
     impersonate: id => Auth.impersonate(id),

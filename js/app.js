@@ -1165,7 +1165,7 @@
           <div class="ec-chips" data-plan-chips></div>
           <div class="ms-auto d-flex align-items-center gap-3">
             <small class="text-muted d-none d-xxl-inline">Scrivi @nome nella nota per taggare un collega</small>
-            <button type="button" class="btn btn-sm ec-btn-modelli" onclick="App.openModelli()">Modelli</button>
+            <button type="button" class="btn btn-orange fw-bold" onclick="App.openModelli()">Modelli</button>
             <input type="search" class="form-control form-control-sm ec-plan-search" data-fkey="plansearch:${cid}"
               placeholder="Cerca pratica, nome, agente…" value="${esc(f.q)}" aria-label="Cerca nel piano" oninput="App.planSearch(this)"/>
           </div>
@@ -1311,7 +1311,7 @@
     withFocus(() => renderPlanBody(card));
   }, 180);
   function openModelli(pid) {
-    Modelli.open({ practices: () => practices, pid, operator: (profile && profile.full_name) || colName(myColleagueId) || '' });
+    Modelli.open({ practices: () => practices, pid, verifica: config.verifica_documenti, operator: (profile && profile.full_name) || colName(myColleagueId) || '' });
   }
   function planClearCols(btn) {
     const card = btn.closest('[data-plan]');
@@ -1641,7 +1641,7 @@
         <div class="card-header ec-plan-toolbar">
           <div class="ec-chips">${tabs}</div>
           <small class="text-muted ms-auto">${note}${items.length ? ` · ${rows.length === items.length ? fmt(items.length) : fmt(rows.length) + ' di ' + fmt(items.length)} pratiche` : ''}</small>
-          <button type="button" class="btn btn-sm ec-btn-modelli" onclick="App.openModelli()">Modelli</button>
+          <button type="button" class="btn btn-orange fw-bold" onclick="App.openModelli()">Modelli</button>
         </div>
         ${items.length ? poolFiltersHtml(items) : ''}
         ${body}

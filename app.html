@@ -275,6 +275,30 @@
             </div>
           </div>
 
+          <!-- Tabella verifica documenti (popup Modelli) -->
+          <div class="card mb-4">
+            <div class="card-header">
+              <h3 class="card-title">Tabella verifica documenti</h3>
+              <div class="card-options"><small class="text-muted">Appare nel popup Modelli → Richiesta integrazione</small></div>
+            </div>
+            <div class="card-body">
+              <div class="row g-3">
+                <div class="col-md-4">
+                  <label class="form-label">Colonne (una per riga)</label>
+                  <textarea id="admin-verifica-persons" class="form-control" rows="8"></textarea>
+                </div>
+                <div class="col-md-8">
+                  <label class="form-label">Documenti: il gruppo va tra [parentesi quadre], poi un documento per riga</label>
+                  <textarea id="admin-verifica-docs" class="form-control font-monospace" rows="14"></textarea>
+                </div>
+              </div>
+              <div class="mt-3 d-flex gap-2">
+                <button class="btn btn-primary" onclick="Admin.saveVerifica()">Salva</button>
+                <button class="btn" onclick="Admin.resetVerifica()">Ripristina predefinita</button>
+              </div>
+            </div>
+          </div>
+
           <!-- Agenti Sally -->
           <div class="card mb-4">
             <div class="card-header">
