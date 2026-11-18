@@ -336,23 +336,60 @@ const Admin = (() => {
   }
 
   // ── AGENTI SALLY (pool agganciabile a un collega) ─────────── */
+  // Quante pratiche del report attivo hanno ciascun agente (match su Agente attuale, senza maiuscole/spazi)
+  const lcn = x => (x || '').toLowerCase().trim();
+  function sallyCounts() {
+    const list = window.App && window.App.getPractices ? window.App.getPractices() : [];
+    const m = {};
+    for (const p of list) { const k = lcn(p.agente_attuale); if (k) m[k] = (m[k] || 0) + 1; }
+    return { m, hasReport: list.length > 0 };
+  }
+
+  function renderSallyStatus() {
+    const el = document.getElementById('admin-sally-status');
+    if (!el) return;
+    const { m, hasReport } = sallyCounts();
+    const total = _agentExclusions.reduce((n, a) => n + (m[lcn(a.agent_name)] || 0), 0);
+    const hooked = _config.sally_hook_colleague_id || '';
+    const col = hooked && _colleagues.find(c => c.id === hooked);
+    const num = hasReport ? ` (${total} pratiche nel report attivo)` : '';
+    let html;
+    if (!_agentExclusions.length) {
+      html = '<span class="text-muted">Nessun agente in elenco: non cambia nulla.</span>';
+    } else if (col && col.active) {
+      html = `<span class="text-success">Le pratiche degli agenti in elenco vanno automaticamente a <b>${UI.esc(col.name)}</b>${num}.</span>`;
+    } else if (col && !col.active) {
+      html = `<span class="text-danger"><b>${UI.esc(col.name)}</b> non è attivo: l'aggancio non ha effetto e le pratiche restano in Da assegnare → Agenti Sally${num}.</span>`;
+    } else {
+      html = `<span class="text-warning">Nessun collega scelto: le pratiche restano in <b>Da assegnare → Agenti Sally</b> per l'assegnazione manuale${num}.</span>`;
+    }
+    el.innerHTML = html;
+  }
+
   function renderSallyHook() {
     const sel = document.getElementById('admin-sally-hook');
     if (!sel) return;
     const hooked = _config.sally_hook_colleague_id || '';
     sel.innerHTML = `
-      <option value="">— nessun aggancio (pool separata) —</option>
-      ${_colleagues.map(c => `<option value="${c.id}" ${hooked === c.id ? 'selected' : ''}>${c.name}</option>`).join('')}`;
+      <option value="">— nessuno: restano in Da assegnare (manuale) —</option>
+      ${_colleagues.map(c => `<option value="${c.id}" ${hooked === c.id ? 'selected' : ''}>${UI.esc(c.name)}${c.active ? '' : ' (non attivo)'}</option>`).join('')}`;
+    renderSallyStatus();
   }
 
   async function setSallyHook(colleagueId) {
     try {
       await DB.setConfig('sally_hook_colleague_id', colleagueId || null);
       _config.sally_hook_colleague_id = colleagueId || null;
-      UI.toast(colleagueId ? 'Pool Agenti Sally agganciata' : 'Aggancio rimosso — pool separata', 'success');
+      renderSallyStatus();
+      UI.toast(colleagueId ? 'Collega scelto: premi "Applica ora al report" per assegnare le pratiche' : 'Nessun collega: pratiche in Da assegnare (premi "Applica ora al report")', 'success');
     } catch(e) {
       UI.toast('Errore: ' + e.message, 'danger');
     }
+  }
+
+  function sallyRecalc() {
+    const b = document.getElementById('btn-ricalcola');
+    if (b) b.click(); else UI.toast('Ricalcolo non disponibile', 'warning');
   }
 
   // ── UTENTI IN ATTESA (nuove registrazioni da approvare) ─────── */
@@ -592,15 +629,26 @@ const Admin = (() => {
   function renderAgentExclusions() {
     const container = document.getElementById('admin-agent-exclusions-list');
     if (!container) return;
+    const { m, hasReport } = sallyCounts();
     if (!_agentExclusions.length) {
-      container.innerHTML = '<span class="text-muted small">Nessun agente in lista</span>';
-      return;
+      container.innerHTML = '<span class="text-muted small">Nessun agente in elenco</span>';
+    } else {
+      container.innerHTML = _agentExclusions.map(ae => {
+        const n = m[lcn(ae.agent_name)] || 0;
+        const miss = hasReport && !n;
+        const cnt = hasReport ? `<span class="ms-1 fw-normal">· ${n}</span>` : '';
+        const tip = hasReport ? (miss ? 'Nessuna pratica con questo agente nel report attivo: controlla il nome' : `${n} pratiche nel report attivo`) : '';
+        return `<span class="badge ${miss ? 'bg-secondary-lt text-secondary' : 'bg-danger-lt text-danger'} me-1 mb-1" title="${UI.esc(tip)}">
+          ${UI.esc(ae.agent_name)}${cnt}
+          <a href="#" class="ms-1 ${miss ? 'text-secondary' : 'text-danger'}" onclick="Admin.removeAgentExclusion('${ae.id}');return false;" aria-label="Rimuovi ${UI.esc(ae.agent_name)}">×</a>
+        </span>`;
+      }).join('') + (hasReport ? '<div class="text-muted small mt-1">Il numero è quante pratiche del report attivo hanno quell\'agente; in grigio = nessuna corrispondenza.</div>' : '');
     }
-    container.innerHTML = _agentExclusions.map(ae => `
-      <span class="badge bg-danger-lt text-danger me-1 mb-1">
-        ${ae.agent_name}
-        <a href="#" class="ms-1 text-danger" onclick="Admin.removeAgentExclusion('${ae.id}');return false;">×</a>
-      </span>`).join('');
+    renderSallyStatus();
+    const dl = document.getElementById('admin-sally-agents-datalist');
+    if (dl && !dl.children.length) {
+      DB.getDistinctAgenti().then(l => { dl.innerHTML = l.map(a => `<option value="${UI.esc(a)}"></option>`).join(''); }).catch(() => {});
+    }
   }
 
   async function addAgentExclusion() {
@@ -635,7 +683,7 @@ const Admin = (() => {
     toggleModalTipologia, toggleModalFilterIncluded, cycleModalFilterMode,
     addModalExcludedAgent, removeModalExcludedAgent,
     saveWorkingDays, renderWorkingDays, saveVerifica, resetVerifica,
-    setSallyHook,
+    setSallyHook, sallyRecalc, refreshSally: () => { renderAgentExclusions(); },
     setUserRole, setUserColleague, approveUser, rejectUser,
     impersonate: id => Auth.impersonate(id),
     addAgentExclusion, removeAgentExclusion, sallyAnalyze, sallyApply, sallyCancel,

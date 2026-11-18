@@ -446,6 +446,7 @@
       indexPractices();
       dataLoaded = true;
       fullRender();
+      try { if (typeof Admin !== 'undefined' && Admin.refreshSally) Admin.refreshSally(); } catch (e) { /* non bloccante */ }
       mark('pagina visibile');
       subscribeRealtime();
       if (background) background().catch(e => console.warn('aggiornamento in background', e));
