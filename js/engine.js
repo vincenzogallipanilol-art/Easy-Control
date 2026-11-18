@@ -1,7 +1,7 @@
 // ================================================================
 // Distribution Engine — adattato da pratiche-distributor v8
-// Filtri stato per-collega (colleagueStateFilters), aggancio pool
-// "Agenti Sally" a un collega (sallyHookColleagueId), agenti esclusi
+// Filtri stato per-collega (colleagueStateFilters), agenti Sally dedicati
+// a un collega (opts.dedicated), agenti esclusi
 // per singolo collega (colleagues.excluded_agents), pratiche bloccate
 // perche' gia' in lavorazione o in un pool (opts.lockedPids).
 // ================================================================
@@ -80,23 +80,43 @@ const Engine = (() => {
 
   // opts.lockedPids  : Set di pratica_id da non (ri)distribuire
   // opts.baseQuotas  : { colleagueId: n } carico gia' presente da contare nella quota
-  function distribute(practices, colleagues, colleagueStateFilters, workingDays, existingManual = [], excludedAgents = [], sallyHookColleagueId = null, opts = {}) {
+  // Agenti Sally per collega: { colleagueId: { agents: [nomi], only: bool } }
+  // Sta in app_config.colleague_agents; senza quella chiave si ricava dalla vecchia
+  // configurazione globale (elenco agenti + collega agganciata + opzione "solo questi agenti").
+  function dedicatedFromConfig(config, agentExclusions) {
+    const cfg = config && config.colleague_agents;
+    if (cfg && typeof cfg === 'object') {
+      const out = {};
+      for (const [id, v] of Object.entries(cfg)) {
+        const agents = Array.isArray(v && v.agents) ? v.agents.filter(Boolean) : [];
+        if (agents.length) out[id] = { agents, only: !!v.only };
+      }
+      return out;
+    }
+    const hook = config && config.sally_hook_colleague_id;
+    const names = (agentExclusions || []).map(a => a.agent_name).filter(Boolean);
+    return hook && names.length ? { [hook]: { agents: names, only: !!(config && config.sally_hook_exclusive) } } : {};
+  }
+
+  // opts.dedicated : mappa di dedicatedFromConfig
+  function distribute(practices, colleagues, colleagueStateFilters, workingDays, existingManual = [], _unusedAgents = [], _unusedHook = null, opts = {}) {
     const filterByColleague = buildFilterByColleague(colleagueStateFilters);
     const lockedPids = opts.lockedPids || new Set();
     const baseQuotas = opts.baseQuotas || {};
     const isLocked   = p => lockedPids.has(p.pratica_id);
-    // Collega agganciata in modo esclusivo: riceve SOLO le pratiche degli agenti Sally (nei suoi stati) e nient'altro
-    const sallyExclusive = !!opts.sallyExclusive;
 
     const manualPracticeIds = new Set(existingManual.map(a => a.practice_id));
-    // Match SOLO su agente_attuale — group_manager/team_manager/area_manager ignorati
-    const excludedSet = new Set((excludedAgents || []).map(a => norm(a.agent_name)));
 
-    // Pool "Agenti Sally": tutte le pratiche non-manuali il cui agente_attuale è in lista
-    const excludedPractices = excludedSet.size > 0
-      ? practices.filter(p => !manualPracticeIds.has(p.id) && !isLocked(p) && excludedSet.has(norm(p.agente_attuale)))
+    // Agenti Sally: ogni agente (match SOLO su agente_attuale) appartiene a un solo collega
+    const dedicated = opts.dedicated || {};
+    const ownerOf = new Map();
+    for (const [cid, v] of Object.entries(dedicated)) {
+      for (const a of (v.agents || [])) if (!ownerOf.has(norm(a))) ownerOf.set(norm(a), cid);
+    }
+    const dedicatedPractices = ownerOf.size
+      ? practices.filter(p => !manualPracticeIds.has(p.id) && !isLocked(p) && ownerOf.has(norm(p.agente_attuale)))
       : [];
-    const excludedIds = new Set(excludedPractices.map(p => p.id));
+    const dedicatedIds = new Set(dedicatedPractices.map(p => p.id));
 
     const activeColleagues = colleagues.filter(c => c.active);
     const quotas = {};
@@ -106,29 +126,22 @@ const Engine = (() => {
     const autoAssignments = [];
     const poolPractices   = [];
 
-    // Se la pool Agenti Sally è agganciata a un collega attivo, tutte le sue
-    // pratiche vanno assegnate automaticamente a quel collega (bypassa tipologia/filtri)
-    const sallyHookValid = sallyHookColleagueId && activeColleagues.some(c => c.id === sallyHookColleagueId);
-    const notTaken = [];   // pratiche Sally non assegnate (stato non accettato dalla collega esclusiva)
-    if (sallyHookValid) {
-      const hookFilters = filterByColleague[sallyHookColleagueId] || {};
-      for (const p of excludedPractices) {
-        if (sallyExclusive && !passesFilter(p, hookFilters[norm(p.stato_attuale)])) { notTaken.push(p); continue; }
-        quotas[sallyHookColleagueId] = (quotas[sallyHookColleagueId] || 0) + 1;
-        autoAssignments.push({
-          practice_id:  p.id,
-          report_id:    p.report_id,
-          colleague_id: sallyHookColleagueId,
-          is_manual:    false,
-        });
-      }
+    // Le pratiche degli agenti Sally vanno solo al collega a cui sono dedicate, e solo se il loro
+    // stato e' tra quelli che il collega ha attivi (filtri stato); le altre restano da assegnare.
+    const notTaken = [];
+    for (const p of dedicatedPractices) {
+      const cid = ownerOf.get(norm(p.agente_attuale));
+      const owner = activeColleagues.find(c => c.id === cid);
+      if (!owner || !passesFilter(p, (filterByColleague[cid] || {})[norm(p.stato_attuale)])) { notTaken.push(p); continue; }
+      quotas[cid] = (quotas[cid] || 0) + 1;
+      autoAssignments.push({ practice_id: p.id, report_id: p.report_id, colleague_id: cid, is_manual: false });
     }
 
     // Pratiche eleggibili alla distribuzione normale: esclude manuali, Agenti Sally e bloccate
-    const eligible = practices.filter(p => !manualPracticeIds.has(p.id) && !excludedIds.has(p.id) && !isLocked(p));
+    const eligible = practices.filter(p => !manualPracticeIds.has(p.id) && !dedicatedIds.has(p.id) && !isLocked(p));
 
-    // Con l'aggancio esclusivo la collega agganciata non entra nella distribuzione normale
-    const candidates = (sallyHookValid && sallyExclusive) ? activeColleagues.filter(c => c.id !== sallyHookColleagueId) : activeColleagues;
+    // Chi ha "solo questi agenti" non entra nella distribuzione normale
+    const candidates = activeColleagues.filter(c => !(dedicated[c.id] && dedicated[c.id].only));
 
     for (const p of eligible) {
       const result = findColleague(p, candidates, quotas, rrIdx, filterByColleague);
@@ -145,7 +158,7 @@ const Engine = (() => {
       }
     }
 
-    // Stats per collega
+  // Stats per collega
     const stats = {};
     for (const c of activeColleagues) {
       stats[c.id] = { total: quotas[c.id] || 0, perDay: workingDays > 0 ? Math.round((quotas[c.id] || 0) / workingDays) : 0 };
@@ -157,13 +170,13 @@ const Engine = (() => {
       eligible:    eligible.length,
       assigned:    autoAssignments.length,
       pool:        poolPractices.length,
-      excluded:    sallyHookValid ? notTaken.length : excludedPractices.length,
-      sallyHooked: sallyHookValid ? excludedPractices.length - notTaken.length : 0,
+      excluded:    notTaken.length,
+      sallyHooked: dedicatedPractices.length - notTaken.length,
       manual:      existingManual.length,
       workingDays,
     };
 
-    return { autoAssignments, poolPractices, excludedPractices: sallyHookValid ? notTaken : excludedPractices, stats, kpi };
+    return { autoAssignments, poolPractices, excludedPractices: notTaken, stats, kpi };
   }
 
   function _poolReason(p, colleagues, quotas, filterByColleague) {
@@ -186,5 +199,5 @@ const Engine = (() => {
     return 'other';
   }
 
-  return { distribute };
+  return { distribute, dedicatedFromConfig };
 })();

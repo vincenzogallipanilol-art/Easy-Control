@@ -180,8 +180,8 @@
   function runEngine(manual) {
     return Engine.distribute(
       practices, colleagues, colleagueStateFilters, config.working_days || 1,
-      manual, agentExclusions, config.sally_hook_colleague_id || null,
-      { ...engineOpts(), sallyExclusive: !!config.sally_hook_exclusive }
+      manual, [], null,
+      { ...engineOpts(), dedicated: Engine.dedicatedFromConfig(config, agentExclusions) }
     );
   }
   const manualAssignments = () => Object.values(assignments).filter(a => a.is_manual);
@@ -447,7 +447,6 @@
       indexPractices();
       dataLoaded = true;
       fullRender();
-      try { if (typeof Admin !== 'undefined' && Admin.refreshSally) Admin.refreshSally(); } catch (e) { /* non bloccante */ }
       mark('pagina visibile');
       subscribeRealtime();
       if (background) background().catch(e => console.warn('aggiornamento in background', e));
@@ -711,13 +710,14 @@
   }
 
   function poolSplit() {
-    const excludedSet = new Set((agentExclusions || []).map(a => norm(a.agent_name)));
-    const sallyHooked = !!(config.sally_hook_colleague_id && colleagues.some(c => c.id === config.sally_hook_colleague_id && c.active));
+    // Agenti Sally: le loro pratiche non entrano nella distribuzione normale (sono dedicate a un collega)
+    const ded = Engine.dedicatedFromConfig(config, agentExclusions);
+    const sallySet = new Set(Object.values(ded).flatMap(v => v.agents.map(norm)));
     const unassigned  = practices.filter(p => !assignments[p.id] && workState(p.pratica_id).phase === 'none');
-    const isSally     = p => excludedSet.size > 0 && excludedSet.has(norm(p.agente_attuale));
+    const isSally     = p => sallySet.size > 0 && sallySet.has(norm(p.agente_attuale));
     return {
       unassigned,
-      sallyPool:   (sallyHooked && !config.sally_hook_exclusive) ? [] : unassigned.filter(isSally),
+      sallyPool:   unassigned.filter(isSally),
       regularPool: unassigned.filter(p => !isSally(p)),
     };
   }
