@@ -310,7 +310,7 @@
               <div class="alert alert-info mb-4" role="note">
                 <div class="fw-bold mb-1">Come funziona</div>
                 Le pratiche il cui <b>Agente attuale</b> (colonna del CSV) coincide con uno dei nomi in elenco <b>non entrano nella distribuzione normale</b>:
-                niente tipologie, filtri stato o quote. Vanno tutte al collega scelto al punto 2; se non ne scegli nessuno restano in <b>Da assegnare → Agenti Sally</b> per l'assegnazione manuale.
+                niente tipologie, filtri stato o quote. Vanno al collega scelto al punto 2 (tutte, oppure solo negli stati che la interessano se attivi "Solo questi agenti"); se non ne scegli nessuno restano in <b>Da assegnare → Agenti Sally</b> per l'assegnazione manuale.
                 Il nome deve essere uguale a quello del report (maiuscole e spazi ai bordi non contano).
                 Le modifiche si applicano al report con <b>Applica ora</b> e a ogni nuovo caricamento.
               </div>
@@ -340,6 +340,10 @@
                 <select id="admin-sally-hook" class="form-select mb-2" style="max-width:360px" onchange="Admin.setSallyHook(this.value)">
                   <option value="">Caricamento…</option>
                 </select>
+                <label class="form-check mb-2" id="admin-sally-excl-wrap">
+                  <input type="checkbox" class="form-check-input" id="admin-sally-exclusive" onchange="Admin.setSallyExclusive(this.checked)"/>
+                  <span class="form-check-label"><b>Solo questi agenti</b>: la collega riceve unicamente le pratiche degli agenti in elenco, e solo negli stati che le interessano (filtri stato della sua scheda). Nessuna altra pratica le viene assegnata.</span>
+                </label>
                 <div id="admin-sally-status" class="small mb-3"></div>
                 <button class="btn btn-primary" onclick="Admin.sallyRecalc()">Applica ora al report</button>
                 <span class="text-muted small ms-2">Ricalcola le assegnazioni automatiche: restano invariate quelle manuali e le pratiche già lavorate.</span>

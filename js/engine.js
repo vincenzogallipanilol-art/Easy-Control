@@ -85,6 +85,8 @@ const Engine = (() => {
     const lockedPids = opts.lockedPids || new Set();
     const baseQuotas = opts.baseQuotas || {};
     const isLocked   = p => lockedPids.has(p.pratica_id);
+    // Collega agganciata in modo esclusivo: riceve SOLO le pratiche degli agenti Sally (nei suoi stati) e nient'altro
+    const sallyExclusive = !!opts.sallyExclusive;
 
     const manualPracticeIds = new Set(existingManual.map(a => a.practice_id));
     // Match SOLO su agente_attuale — group_manager/team_manager/area_manager ignorati
@@ -107,8 +109,11 @@ const Engine = (() => {
     // Se la pool Agenti Sally è agganciata a un collega attivo, tutte le sue
     // pratiche vanno assegnate automaticamente a quel collega (bypassa tipologia/filtri)
     const sallyHookValid = sallyHookColleagueId && activeColleagues.some(c => c.id === sallyHookColleagueId);
+    const notTaken = [];   // pratiche Sally non assegnate (stato non accettato dalla collega esclusiva)
     if (sallyHookValid) {
+      const hookFilters = filterByColleague[sallyHookColleagueId] || {};
       for (const p of excludedPractices) {
+        if (sallyExclusive && !passesFilter(p, hookFilters[norm(p.stato_attuale)])) { notTaken.push(p); continue; }
         quotas[sallyHookColleagueId] = (quotas[sallyHookColleagueId] || 0) + 1;
         autoAssignments.push({
           practice_id:  p.id,
@@ -122,8 +127,11 @@ const Engine = (() => {
     // Pratiche eleggibili alla distribuzione normale: esclude manuali, Agenti Sally e bloccate
     const eligible = practices.filter(p => !manualPracticeIds.has(p.id) && !excludedIds.has(p.id) && !isLocked(p));
 
+    // Con l'aggancio esclusivo la collega agganciata non entra nella distribuzione normale
+    const candidates = (sallyHookValid && sallyExclusive) ? activeColleagues.filter(c => c.id !== sallyHookColleagueId) : activeColleagues;
+
     for (const p of eligible) {
-      const result = findColleague(p, activeColleagues, quotas, rrIdx, filterByColleague);
+      const result = findColleague(p, candidates, quotas, rrIdx, filterByColleague);
       if (result) {
         quotas[result.colleague.id]++;
         autoAssignments.push({
@@ -133,7 +141,7 @@ const Engine = (() => {
           is_manual:    false,
         });
       } else {
-        poolPractices.push({ ...p, _reason: _poolReason(p, activeColleagues, quotas, filterByColleague) });
+        poolPractices.push({ ...p, _reason: _poolReason(p, candidates, quotas, filterByColleague) });
       }
     }
 
@@ -149,13 +157,13 @@ const Engine = (() => {
       eligible:    eligible.length,
       assigned:    autoAssignments.length,
       pool:        poolPractices.length,
-      excluded:    sallyHookValid ? 0 : excludedPractices.length,
-      sallyHooked: sallyHookValid ? excludedPractices.length : 0,
+      excluded:    sallyHookValid ? notTaken.length : excludedPractices.length,
+      sallyHooked: sallyHookValid ? excludedPractices.length - notTaken.length : 0,
       manual:      existingManual.length,
       workingDays,
     };
 
-    return { autoAssignments, poolPractices, excludedPractices: sallyHookValid ? [] : excludedPractices, stats, kpi };
+    return { autoAssignments, poolPractices, excludedPractices: sallyHookValid ? notTaken : excludedPractices, stats, kpi };
   }
 
   function _poolReason(p, colleagues, quotas, filterByColleague) {

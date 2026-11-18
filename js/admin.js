@@ -356,6 +356,8 @@ const Admin = (() => {
     let html;
     if (!_agentExclusions.length) {
       html = '<span class="text-muted">Nessun agente in elenco: non cambia nulla.</span>';
+    } else if (col && col.active && _config.sally_hook_exclusive) {
+      html = `<span class="text-success"><b>${UI.esc(col.name)}</b> riceve solo le pratiche degli agenti in elenco${num}, negli stati che ha attivi nella sua scheda. Le pratiche degli agenti in altri stati restano in Da assegnare → Agenti Sally; nessun'altra pratica va a lei.</span>`;
     } else if (col && col.active) {
       html = `<span class="text-success">Le pratiche degli agenti in elenco vanno automaticamente a <b>${UI.esc(col.name)}</b>${num}.</span>`;
     } else if (col && !col.active) {
@@ -373,6 +375,8 @@ const Admin = (() => {
     sel.innerHTML = `
       <option value="">— nessuno: restano in Da assegnare (manuale) —</option>
       ${_colleagues.map(c => `<option value="${c.id}" ${hooked === c.id ? 'selected' : ''}>${UI.esc(c.name)}${c.active ? '' : ' (non attivo)'}</option>`).join('')}`;
+    const ex = document.getElementById('admin-sally-exclusive');
+    if (ex) { ex.checked = !!_config.sally_hook_exclusive; ex.disabled = !hooked; }
     renderSallyStatus();
   }
 
@@ -380,9 +384,22 @@ const Admin = (() => {
     try {
       await DB.setConfig('sally_hook_colleague_id', colleagueId || null);
       _config.sally_hook_colleague_id = colleagueId || null;
+      const ex = document.getElementById('admin-sally-exclusive'); if (ex) ex.disabled = !colleagueId;
       renderSallyStatus();
       UI.toast(colleagueId ? 'Collega scelto: premi "Applica ora al report" per assegnare le pratiche' : 'Nessun collega: pratiche in Da assegnare (premi "Applica ora al report")', 'success');
     } catch(e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  async function setSallyExclusive(on) {
+    try {
+      await DB.setConfig('sally_hook_exclusive', !!on);
+      _config.sally_hook_exclusive = !!on;
+      renderSallyStatus();
+      UI.toast(on ? 'Solo gli agenti Sally: premi "Applica ora al report" per aggiornare le assegnazioni' : 'Aggancio esclusivo disattivato (premi "Applica ora al report")', 'success');
+    } catch (e) {
+      const ex = document.getElementById('admin-sally-exclusive'); if (ex) ex.checked = !on;
       UI.toast('Errore: ' + e.message, 'danger');
     }
   }
@@ -683,7 +700,7 @@ const Admin = (() => {
     toggleModalTipologia, toggleModalFilterIncluded, cycleModalFilterMode,
     addModalExcludedAgent, removeModalExcludedAgent,
     saveWorkingDays, renderWorkingDays, saveVerifica, resetVerifica,
-    setSallyHook, sallyRecalc, refreshSally: () => { renderAgentExclusions(); },
+    setSallyHook, setSallyExclusive, sallyRecalc, refreshSally: () => { renderAgentExclusions(); },
     setUserRole, setUserColleague, approveUser, rejectUser,
     impersonate: id => Auth.impersonate(id),
     addAgentExclusion, removeAgentExclusion, sallyAnalyze, sallyApply, sallyCancel,

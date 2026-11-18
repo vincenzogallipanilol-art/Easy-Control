@@ -180,7 +180,8 @@
   function runEngine(manual) {
     return Engine.distribute(
       practices, colleagues, colleagueStateFilters, config.working_days || 1,
-      manual, agentExclusions, config.sally_hook_colleague_id || null, engineOpts()
+      manual, agentExclusions, config.sally_hook_colleague_id || null,
+      { ...engineOpts(), sallyExclusive: !!config.sally_hook_exclusive }
     );
   }
   const manualAssignments = () => Object.values(assignments).filter(a => a.is_manual);
@@ -716,7 +717,7 @@
     const isSally     = p => excludedSet.size > 0 && excludedSet.has(norm(p.agente_attuale));
     return {
       unassigned,
-      sallyPool:   sallyHooked ? [] : unassigned.filter(isSally),
+      sallyPool:   (sallyHooked && !config.sally_hook_exclusive) ? [] : unassigned.filter(isSally),
       regularPool: unassigned.filter(p => !isSally(p)),
     };
   }
