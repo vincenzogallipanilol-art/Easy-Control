@@ -2,7 +2,7 @@
 // ColFilter — filtri e ordinamento per colonna (stile Excel / Fogli Google)
 // ================================================================
 const ColFilter = (() => {
-  const state = {};   // tabella -> { ex: { colonna: Set(valori esclusi) }, sort: { col, dir } | null }
+  const state = {};   // tabella -> { ex: { colonna: Set(valori esclusi) }, sorts: [{ col, dir }, ...] (ordine = priorita') }
   const reg   = {};   // tabella -> { all: () => righe, cols: { colonna: riga => valore }, sortKeys?, onChange }
   let pop = null, cur = null;
   const MAX_LIST = 300;
@@ -10,7 +10,8 @@ const ColFilter = (() => {
   const collator = new Intl.Collator('it', { numeric: true, sensitivity: 'base' });
   const val  = v => (v == null ? '' : String(v)).trim();
   const esc  = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const st   = k => state[k] || (state[k] = { ex: {}, sort: null });
+  const st   = k => state[k] || (state[k] = { ex: {}, sorts: [] });
+  const sortOf = (s, c) => (s && s.sorts ? s.sorts.findIndex(x => x.col === c) : -1);
 
   function register(key, def) { reg[key] = def; }
 
@@ -27,19 +28,25 @@ const ColFilter = (() => {
     let out = rows;
     const cols = exCols(key);
     if (cols.length) out = out.filter(row => cols.every(c => !s.ex[c].has(val(r.cols[c](row)))));
-    if (s.sort && r.cols[s.sort.col]) {
-      const g = (r.sortKeys && r.sortKeys[s.sort.col]) || r.cols[s.sort.col];
-      const d = s.sort.dir === 'desc' ? -1 : 1;
-      out = out.map(row => [val(g(row)), row]).sort((a, b) => {
-        if (!a[0] && b[0]) return 1;       // le celle vuote vanno sempre in fondo
-        if (a[0] && !b[0]) return -1;
-        return d * collator.compare(a[0], b[0]);
+    const sorts = (s.sorts || []).filter(x => r.cols[x.col]);
+    if (sorts.length) {
+      // Ordinamento su piu' colonne: la prima e' il criterio principale, le altre spareggiano
+      const keys = sorts.map(x => ({ g: (r.sortKeys && r.sortKeys[x.col]) || r.cols[x.col], d: x.dir === 'desc' ? -1 : 1 }));
+      out = out.map(row => [keys.map(k => val(k.g(row))), row]).sort((a, b) => {
+        for (let i = 0; i < keys.length; i++) {
+          const x = a[0][i], y = b[0][i];
+          if (!x && y) return 1;       // le celle vuote vanno sempre in fondo
+          if (x && !y) return -1;
+          const c = keys[i].d * collator.compare(x, y);
+          if (c) return c;
+        }
+        return 0;
       }).map(x => x[1]);
     }
     return out;
   }
 
-  const active = key => !!(state[key] && (exCols(key).length || state[key].sort));
+  const active = key => !!(state[key] && (exCols(key).length || state[key].sorts.length));
 
   function clear(prefix) {
     for (const k of Object.keys(state)) if (k === prefix || k.startsWith(prefix)) delete state[k];
@@ -50,8 +57,9 @@ const ColFilter = (() => {
   function th(key, col, label, cls = '') {
     const s = state[key];
     const f = s && s.ex[col] && s.ex[col].size;
-    const so = s && s.sort && s.sort.col === col ? s.sort.dir : '';
-    return `<th class="ec-cf ${cls}${f ? ' is-filtered' : ''}${so ? ' is-' + so : ''}" data-cf-t="${esc(key)}" data-cf-c="${esc(col)}">` +
+    const si = sortOf(s, col), so = si >= 0 ? s.sorts[si].dir : '';
+    const pri = si >= 0 && s.sorts.length > 1 ? String(si + 1) : '';
+    return `<th class="ec-cf ${cls}${f ? ' is-filtered' : ''}${so ? ' is-' + so : ''}" data-cf-t="${esc(key)}" data-cf-c="${esc(col)}" data-cf-p="${pri}">` +
       `<span class="ec-cf-label">${label}</span>` +
       `<button type="button" class="ec-cf-btn" aria-label="Filtra e ordina: ${esc(label.replace(/<[^>]*>/g, ''))}" aria-haspopup="dialog" onclick="ColFilter.open(this)">` +
       `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 4h18l-7 8.5V20l-4-2v-5.5z"/></svg></button></th>`;
@@ -61,7 +69,8 @@ const ColFilter = (() => {
     document.querySelectorAll('th[data-cf-t]').forEach(h => {
       const s = state[h.dataset.cfT], c = h.dataset.cfC;
       const f = !!(s && s.ex[c] && s.ex[c].size && reg[h.dataset.cfT] && reg[h.dataset.cfT].cols[c]);
-      const so = s && s.sort && s.sort.col === c ? s.sort.dir : '';
+      const si = sortOf(s, c), so = si >= 0 ? s.sorts[si].dir : '';
+      h.dataset.cfP = si >= 0 && s.sorts.length > 1 ? String(si + 1) : '';
       h.classList.toggle('is-filtered', f);
       h.classList.toggle('is-asc', so === 'asc');
       h.classList.toggle('is-desc', so === 'desc');
@@ -121,12 +130,15 @@ const ColFilter = (() => {
     pop.className = 'ec-cf-pop';
     pop.setAttribute('role', 'dialog');
     pop.setAttribute('aria-label', 'Filtra e ordina');
-    const so = s.sort && s.sort.col === col ? s.sort.dir : '';
+    const si0 = sortOf(s, col), so = si0 >= 0 ? s.sorts[si0].dir : '';
+    const otherSorts = s.sorts.length - (si0 >= 0 ? 1 : 0);
     pop.innerHTML = `
       <div class="ec-cf-sort">
         <button type="button" class="${so === 'asc' ? 'is-on' : ''}" data-act="asc">Ordina A → Z</button>
         <button type="button" class="${so === 'desc' ? 'is-on' : ''}" data-act="desc">Ordina Z → A</button>
-        ${so ? '<button type="button" data-act="nosort">Rimuovi ordinamento</button>' : ''}
+        ${so ? '<button type="button" data-act="nosort">Rimuovi ordinamento da questa colonna</button>' : ''}
+        ${s.sorts.length > 1 ? '<button type="button" data-act="nosortall">Rimuovi tutti gli ordinamenti</button>' : ''}
+        ${otherSorts > 0 ? '<div class="ec-cf-hint">Gli ordinamenti si sommano: questa colonna spareggia quelle ordinate prima.</div>' : ''}
       </div>
       <input type="search" class="form-control form-control-sm ec-cf-search" placeholder="Cerca valore…" aria-label="Cerca valore" autocomplete="off"/>
       <label class="ec-cf-all"><input type="checkbox" data-act="all"/> <span>Seleziona tutto</span></label>
@@ -145,8 +157,13 @@ const ColFilter = (() => {
       const a = e.target.closest('[data-act]');
       if (!a || a.tagName === 'INPUT') return;
       const act = a.dataset.act;
-      if (act === 'asc' || act === 'desc') { s.sort = { col, dir: act }; close(); changed(key); }
-      else if (act === 'nosort') { s.sort = null; close(); changed(key); }
+      if (act === 'asc' || act === 'desc') {
+        const i = sortOf(s, col);
+        if (i >= 0) s.sorts[i].dir = act; else s.sorts.push({ col, dir: act });
+        close(); changed(key);
+      }
+      else if (act === 'nosort') { s.sorts = s.sorts.filter(x => x.col !== col); close(); changed(key); }
+      else if (act === 'nosortall') { s.sorts = []; close(); changed(key); }
       else if (act === 'clear') { delete s.ex[col]; close(); changed(key); }
       else if (act === 'cancel') close();
       else if (act === 'ok') ok();
