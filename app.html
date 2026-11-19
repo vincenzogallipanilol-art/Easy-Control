@@ -13,6 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"/>
   <link rel="stylesheet" href="css/app.css"/>
+  <script src="js/theme.js"></script>
 </head>
 <body class="antialiased">
 
@@ -174,9 +175,23 @@
                 Esporta
               </button>
               <!-- Utente -->
-              <div class="ec-user-chip" title="Utente collegato">
-                <span class="ec-user-avatar" id="user-avatar" aria-hidden="true"></span>
-                <span class="ec-user-meta"><span id="user-name-display"></span><span id="user-role-badge"></span></span>
+              <div class="dropdown">
+                <button type="button" class="ec-user-chip" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true" title="Menu utente">
+                  <span class="ec-user-avatar" id="user-avatar" aria-hidden="true"></span>
+                  <span class="ec-user-meta"><span id="user-name-display"></span><span id="user-role-badge"></span></span>
+                  <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="dropdown-menu dropdown-menu-end ec-theme-menu">
+                  <div class="dropdown-header">Aspetto</div>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-theme-opt="light" role="menuitemradio" onclick="Theme.set('light')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                    Chiaro
+                  </button>
+                  <button type="button" class="dropdown-item d-flex align-items-center gap-2" data-theme-opt="dark" role="menuitemradio" onclick="Theme.set('dark')">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+                    Scuro
+                  </button>
+                </div>
               </div>
             </div>
           </div>
