@@ -819,3 +819,20 @@ html[data-bs-theme="dark"] .ec-chart-empty, html[data-bs-theme="dark"] .ec-empty
 .ec-cf-search { font-size: .9rem; margin-bottom: .35rem; }
 .ec-cf-item { padding: .3rem .25rem; font-size: .875rem; }
 .ec-pool-filters input[type="search"] { width: 340px; max-width: 100%; flex: 0 1 340px; }
+
+/* Avviso nuova versione e riepilogo novità */
+.ec-version { cursor: pointer; }
+.ec-update-bar {
+  position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); z-index: 2600;
+  display: flex; align-items: center; gap: .9rem; max-width: calc(100vw - 24px);
+  padding: .65rem 1rem; border-radius: 12px; background: #206bc4; color: #fff; font-size: .875rem;
+  box-shadow: 0 8px 28px rgba(16, 40, 90, .45); animation: fadeIn .25s ease;
+}
+.ec-log-box { width: min(560px, 100%); height: auto; max-height: min(80vh, 640px); }
+.ec-log-body { padding: 1rem 1.25rem; overflow: auto; }
+.ec-log-entry + .ec-log-entry { margin-top: 1.1rem; padding-top: 1.1rem; border-top: 1px solid #eef1f5; }
+.ec-log-ver { font-weight: 700; margin-bottom: .35rem; }
+.ec-log-entry ul { margin: 0; padding-left: 1.2rem; }
+.ec-log-entry li { margin: .25rem 0; line-height: 1.45; }
+.ec-log-foot { padding: .75rem 1.25rem; border-top: 1px solid #eef1f5; text-align: right; }
+html[data-bs-theme="dark"] .ec-log-entry + .ec-log-entry, html[data-bs-theme="dark"] .ec-log-foot { border-color: var(--ec-ln); }
