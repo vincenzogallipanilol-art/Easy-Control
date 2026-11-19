@@ -64,7 +64,7 @@ h1, h2, h3, h4, h5, .card-title, .btn { font-family: var(--ec-font); }
 }
 .ec-sidebar .nav-link:hover { background: rgba(255, 255, 255, .09); color: #fff; }
 .ec-sidebar .nav-link.active { background: rgba(255, 255, 255, .17); color: #fff; }
-.ec-sidebar .nav-link-icon { margin: 0 !important; flex-shrink: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; }
+.ec-sidebar .nav-link-icon { margin: 0 !important; flex-shrink: 0; width: 24px; height: 24px; display: flex; align-items: center; justify-content: center; position: relative; }
 .ec-sidebar .nav-link-icon svg { width: 24px !important; height: 24px !important; }
 .ec-sidebar .nav-link-title { font-size: 1rem; font-weight: 500; white-space: nowrap; }
 
@@ -239,6 +239,44 @@ h1, h2, h3, h4, h5, .card-title, .btn { font-family: var(--ec-font); }
   color: #8a99ab;
   text-align: right;
   margin-top: .15rem;
+}
+
+/* ── VERSIONE (sopra il logout) ───────────────────────────────── */
+.ec-version { text-align: center; font-size: .68rem; letter-spacing: .02em; color: rgba(255, 255, 255, .6); padding: 0 0 .35rem; white-space: nowrap; }
+
+/* ── CHAT: elenco conversazioni + messaggi ───────────────────── */
+.ec-chat-layout { display: grid; grid-template-columns: 290px minmax(0, 1fr); min-height: 560px; }
+.ec-chat-side { border-right: 1px solid #e6e9ef; display: flex; flex-direction: column; min-height: 0; }
+.ec-chat-side-head, .ec-chat-head { padding: .85rem 1rem; font-weight: 600; border-bottom: 1px solid #e6e9ef; }
+.ec-chat-convs { overflow-y: auto; flex: 1; }
+.ec-chat-conv {
+  display: flex; align-items: center; gap: .65rem; width: 100%; text-align: left;
+  padding: .65rem 1rem; border: 0; border-bottom: 1px solid #f1f3f7; background: transparent; cursor: pointer;
+}
+.ec-chat-conv:hover { background: #f6f8fb; }
+.ec-chat-conv.is-active { background: #e8f0fb; }
+.ec-chat-conv-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.ec-chat-conv-name { font-weight: 600; font-size: .875rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ec-chat-conv-last { font-size: .75rem; color: #8a97a8; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ec-chat-conv-meta { display: flex; flex-direction: column; align-items: flex-end; gap: .25rem; flex-shrink: 0; }
+.ec-chat-conv-time { font-size: .65rem; color: #8a97a8; }
+.ec-unread {
+  min-width: 20px; height: 20px; padding: 0 6px; border-radius: 10px; background: #d63939; color: #fff;
+  font-size: .7rem; font-weight: 700; line-height: 20px; text-align: center; animation: ec-blink 1.2s ease-in-out infinite;
+}
+.ec-chat-main { display: flex; flex-direction: column; min-width: 0; }
+.ec-chat-main .ec-chat-messages { flex: 1; height: auto; min-height: 380px; max-height: 60vh; border-radius: 0; }
+.ec-chat-foot { padding: .75rem 1rem; border-top: 1px solid #e6e9ef; }
+.ec-nav-badge {
+  position: absolute; top: -7px; right: -9px; min-width: 18px; height: 18px; padding: 0 5px; border-radius: 9px;
+  background: #d63939; color: #fff; font-size: 10px; font-weight: 700; line-height: 18px; text-align: center;
+  box-shadow: 0 0 0 2px #3a2699; animation: ec-blink 1.2s ease-in-out infinite;
+}
+@keyframes ec-blink { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .45; transform: scale(1.12); } }
+@media (prefers-reduced-motion: reduce) { .ec-unread, .ec-nav-badge { animation: none; } }
+@media (max-width: 767px) {
+  .ec-chat-layout { grid-template-columns: 1fr; }
+  .ec-chat-side { border-right: 0; border-bottom: 1px solid #e6e9ef; max-height: 210px; }
 }
 
 /* ── NOTIFICHE ────────────────────────────────────────────────── */

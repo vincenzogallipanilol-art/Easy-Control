@@ -354,16 +354,31 @@ const DB = (() => {
 
   // ── CHAT (stanza unica) ───────────────────────────────── */
   async function getChatMessages() {
+    // ultimi messaggi (gruppo + privati miei); author:profiles!author_id evita l'ambiguita' con recipient_id
     const { data, error } = await db.from('chat_messages')
-      .select('*, author:profiles(full_name,email)')
-      .order('created_at', { ascending: true }).limit(300);
+      .select('*, author:profiles!author_id(full_name,email)')
+      .order('created_at', { ascending: false }).limit(800);
     if (error) throw error;
-    return data;
+    return data.reverse();
   }
-  async function sendChatMessage(body) {
+  async function sendChatMessage(body, recipientId) {
     const { data: { user } } = await db.auth.getUser();
-    const { error } = await db.from('chat_messages').insert({ author_id: user.id, body });
+    const row = { author_id: user.id, body };
+    if (recipientId) row.recipient_id = recipientId;   // messaggio privato (richiede la migration chat privata)
+    const { error } = await db.from('chat_messages').insert(row);
     if (error) throw error;
+  }
+  // Ultima lettura per conversazione ({ conv: iso }); null se la tabella non esiste ancora
+  async function getChatReads() {
+    const { data: { user } } = await db.auth.getUser();
+    const { data, error } = await db.from('chat_reads').select('conv,last_read_at').eq('user_id', user.id);
+    if (error) return null;
+    return Object.fromEntries(data.map(r => [r.conv, r.last_read_at]));
+  }
+  async function markChatRead(conv, iso) {
+    const { data: { user } } = await db.auth.getUser();
+    const { error } = await db.from('chat_reads').upsert({ user_id: user.id, conv, last_read_at: iso }, { onConflict: 'user_id,conv' });
+    return !error;
   }
 
   return {
@@ -380,6 +395,6 @@ const DB = (() => {
     getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, getCheckSeries, notifyMentions,
     isMissingSchema,
     getNotifications, markNotificationRead, markAllNotificationsRead,
-    getChatMessages, sendChatMessage,
+    getChatMessages, sendChatMessage, getChatReads, markChatRead,
   };
 })();

@@ -63,6 +63,9 @@
   let users            = [];
   let notifications    = [];
   let chatMessages     = [];
+  let chatConv         = 'group';   // conversazione aperta: 'group' oppure l'id dell'utente
+  let chatReads        = {};        // ultima lettura per conversazione (DB)
+  const chatDrafts     = {};        // testo non ancora inviato per conversazione
 
   let work             = {};  // pratica_id -> riga practice_work (stato/nota correnti)
   let stats            = [];  // righe check_stats(): controllate per collega/stato
@@ -224,7 +227,7 @@
     if (push) history.pushState(null, '', hash); else history.replaceState(null, '', hash);
 
     if (target === 'admin') Admin.init();
-    else if (target === 'chat') { renderChat(); scrollChatToBottom(); }
+    else if (target === 'chat') chatEnter();
     else renderSection(target);
     if (push) window.scrollTo(0, 0);
   }
@@ -461,19 +464,22 @@
   // 5b. Dati indipendenti dal report attivo
   async function loadGlobalData() {
     try {
-      const [usersData, notifData, chatData] = await Promise.all([
+      const [usersData, notifData, chatData, readsData] = await Promise.all([
         DB.getUsers(),
         DB.getNotifications(),
         DB.getChatMessages(),
+        DB.getChatReads().catch(() => null),
         loadStats(),
         loadSeries(),
       ]);
       users = usersData;
       notifications = notifData;
       chatMessages = chatData;
+      chatReads = readsData || {};
 
       renderNotifBell();
-      if (currentTarget === 'chat') { renderChat(); scrollChatToBottom(); }
+      updateChatBadge();
+      if (currentTarget === 'chat') chatEnter();
       else if (currentTarget === 'scheda') fullRender();
       else softRender();
     } catch (e) {
@@ -486,9 +492,18 @@
     Realtime.subscribeGlobal(session.user.id, {
       onChatMessage() {
         DB.getChatMessages().then(d => {
+          const known = new Set(chatMessages.map(m => m.id));
+          const fresh = d.filter(m => !known.has(m.id) && m.author_id !== session.user.id);
           chatMessages = d;
-          if (currentTarget === 'chat') { withFocus(renderChat); scrollChatToBottom(); }
-        });
+          const viewing = currentTarget === 'chat' && !document.hidden;
+          const last = fresh[fresh.length - 1];
+          if (last && !(viewing && chatConvOf(last) === chatConv)) {
+            UI.toast(`${(last.author && (last.author.full_name || last.author.email)) || 'Chat'}: ${String(last.body).slice(0, 70)}`, 'info');
+          }
+          if (viewing) chatMarkRead(chatConv);
+          updateChatBadge();
+          if (currentTarget === 'chat') withFocus(() => renderChat());
+        }).catch(() => {});
       },
       onWorkChange(payload) {
         const { eventType, new: row, old } = payload;
@@ -1885,39 +1900,141 @@
     XLSX.writeFile(wb, `distribuzione-${new Date().toISOString().slice(0, 10)}.xlsx`);
   }
 
-  // ── 15. CHAT (stanza unica) ────────────────────────────────────────
-  function renderChat() {
+  // ── 15. CHAT (gruppo + messaggi privati, con messaggi da leggere) ───
+  const chatStoreKey = () => 'ec_chat_' + session.user.id;
+  function chatLocal() { try { return JSON.parse(localStorage.getItem(chatStoreKey()) || '{}'); } catch (e) { return {}; } }
+  function chatLocalSave(o) { try { localStorage.setItem(chatStoreKey(), JSON.stringify(o)); } catch (e) { /* storage non disponibile */ } }
+  // I messaggi precedenti al primo uso della chat non contano come da leggere
+  function chatBaseline() {
+    const l = chatLocal();
+    if (!l.base) { l.base = new Date().toISOString(); chatLocalSave(l); }
+    return Date.parse(l.base);
+  }
+  const chatConvOf = m => m.recipient_id ? (m.author_id === session.user.id ? m.recipient_id : m.author_id) : 'group';
+  function chatLastRead(conv) {
+    const l = chatLocal();
+    return Math.max(chatBaseline(), Date.parse(chatReads[conv]) || 0, Date.parse((l.reads || {})[conv]) || 0);
+  }
+  function chatUnread() {
+    const out = {}, lr = {};
+    for (const m of chatMessages) {
+      if (m.author_id === session.user.id) continue;
+      const c = chatConvOf(m);
+      if (!(c in lr)) lr[c] = chatLastRead(c);
+      if (Date.parse(m.created_at) > lr[c]) out[c] = (out[c] || 0) + 1;
+    }
+    return out;
+  }
+  // Badge rosso lampeggiante sul menu + numero nel titolo della scheda del browser
+  function updateChatBadge() {
+    const u = chatUnread();
+    const n = Object.values(u).reduce((a, b) => a + b, 0);
+    const b = $('chat-badge');
+    if (b) { b.textContent = n > 99 ? '99+' : String(n); b.style.display = n ? '' : 'none'; }
+    document.title = (n ? `(${n}) ` : '') + 'Easy Control';
+    return u;
+  }
+  // Segna come letta la conversazione (fino all'ultimo messaggio ricevuto)
+  function chatMarkRead(conv) {
+    let latest = 0;
+    for (const m of chatMessages) if (chatConvOf(m) === conv) latest = Math.max(latest, Date.parse(m.created_at) || 0);
+    if (!latest || latest <= chatLastRead(conv)) return;
+    const iso = new Date(latest).toISOString();
+    chatReads[conv] = iso;
+    const l = chatLocal(); l.reads = l.reads || {}; l.reads[conv] = iso; chatLocalSave(l);
+    DB.markChatRead(conv, iso).catch(() => {});
+  }
+  function chatEnter() {
+    chatMarkRead(chatConv);
+    renderChat({ bottom: true });
+    $('chat-input')?.focus();
+  }
+  function chatOpen(conv) {
+    const cur = $('chat-input'); if (cur) chatDrafts[chatConv] = cur.value;
+    chatConv = conv;
+    chatEnter();
+  }
+
+  const chatName = u => (u && (u.full_name || u.email)) || '—';
+  function renderChat(opts = {}) {
     const el = $('chat-content');
     if (!el) return;
+    const me = session.user.id;
+    const box0 = $('chat-messages');
+    const atBottom = !box0 || box0.scrollHeight - box0.scrollTop - box0.clientHeight < 60;
+    const keepTop = box0 ? box0.scrollTop : 0;
+    const cur0 = $('chat-input'); if (cur0) chatDrafts[chatConv] = cur0.value;
+
+    const unread = updateChatBadge();
+    const last = {};
+    for (const m of chatMessages) last[chatConvOf(m)] = m;     // in ordine cronologico: l'ultimo vince
+    const ts = c => (last[c] ? Date.parse(last[c].created_at) : 0);
+    const people = users.filter(u => u.status === 'approved' && u.id !== me)
+      .sort((a, b) => ts(b.id) - ts(a.id) || chatName(a).localeCompare(chatName(b), 'it'));
+    const preview = (c, group) => {
+      const m = last[c];
+      if (!m) return 'Nessun messaggio';
+      const who = m.author_id === me ? 'Tu' : (group ? String(chatName(m.author)).split(' ')[0] : '');
+      return (who ? who + ': ' : '') + m.body;
+    };
+    const item = (c, title, avatar, group) => `
+      <button type="button" class="ec-chat-conv${c === chatConv ? ' is-active' : ''}" onclick="App.chatOpen('${c}')">
+        ${avatar}
+        <span class="ec-chat-conv-main"><span class="ec-chat-conv-name">${esc(title)}</span><span class="ec-chat-conv-last">${esc(preview(c, group))}</span></span>
+        <span class="ec-chat-conv-meta">${last[c] ? `<span class="ec-chat-conv-time">${UI.timeAgo(last[c].created_at)}</span>` : ''}${unread[c] ? `<span class="ec-unread">${unread[c]}</span>` : ''}</span>
+      </button>`;
+    const groupAvatar = '<span class="avatar avatar-sm bg-azure-lt"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>';
+    const convs = item('group', 'Tutto il gruppo', groupAvatar, true)
+      + people.map(u => item(u.id, chatName(u), `<span class="avatar avatar-sm bg-blue-lt">${esc(UI.initialsAvatar(chatName(u)))}</span>`, false)).join('');
+
+    const peer = chatConv === 'group' ? null : users.find(u => u.id === chatConv);
+    const title = chatConv === 'group' ? 'Tutto il gruppo' : chatName(peer);
+    const msgs = chatMessages.filter(m => chatConvOf(m) === chatConv);
+    const msgHtml = msgs.length ? msgs.map(m => {
+      const mine = m.author_id === me;
+      const showAuthor = !mine && chatConv === 'group';
+      return `
+      <div class="ec-chat-row ${mine ? 'ec-chat-row--mine' : ''}">
+        ${showAuthor ? `<span class="avatar avatar-xs bg-blue-lt ec-chat-avatar">${esc(UI.initialsAvatar(chatName(m.author)))}</span>` : ''}
+        <div class="ec-chat-bubble ${mine ? 'ec-chat-bubble--mine' : ''}">
+          ${showAuthor ? `<div class="ec-chat-author">${esc(chatName(m.author))}</div>` : ''}
+          <div class="ec-chat-body">${esc(m.body)}</div>
+          <div class="ec-chat-time">${UI.timeAgo(m.created_at)}</div>
+        </div>
+      </div>`;
+    }).join('') : `<div class="text-muted text-center py-4">${chatConv === 'group' ? 'Nessun messaggio ancora. Scrivi il primo!' : 'Nessun messaggio con ' + esc(title) + '. Scrivi il primo!'}</div>`;
 
     el.innerHTML = `
       <div class="card">
-        <div class="card-header"><h3 class="card-title">Chat di gruppo</h3></div>
-        <div id="chat-messages" class="ec-chat-messages">
-          ${chatMessages.length ? chatMessages.map(m => {
-            const mine = m.author_id === session.user.id;
-            return `
-            <div class="ec-chat-row ${mine ? 'ec-chat-row--mine' : ''}">
-              ${!mine ? `<span class="avatar avatar-xs bg-blue-lt ec-chat-avatar">${esc(UI.initialsAvatar(m.author?.full_name || m.author?.email))}</span>` : ''}
-              <div class="ec-chat-bubble ${mine ? 'ec-chat-bubble--mine' : ''}">
-                ${!mine ? `<div class="ec-chat-author">${esc(m.author?.full_name || m.author?.email || '—')}</div>` : ''}
-                <div class="ec-chat-body">${esc(m.body)}</div>
-                <div class="ec-chat-time">${UI.timeAgo(m.created_at)}</div>
+        <div class="ec-chat-layout">
+          <aside class="ec-chat-side" aria-label="Conversazioni">
+            <div class="ec-chat-side-head">Chat</div>
+            <div class="ec-chat-convs">${convs}</div>
+          </aside>
+          <section class="ec-chat-main">
+            <div class="ec-chat-head">${esc(title)}${chatConv === 'group' ? '' : ' <span class="text-muted fw-normal small">· messaggio privato</span>'}</div>
+            <div id="chat-messages" class="ec-chat-messages">${msgHtml}</div>
+            <div class="ec-chat-foot">
+              <div class="input-group">
+                <input type="text" id="chat-input" data-fkey="chat-input" class="form-control" autocomplete="off"
+                  placeholder="${chatConv === 'group' ? 'Scrivi al gruppo…' : 'Scrivi a ' + esc(title) + '…'}"/>
+                <button class="btn btn-primary" onclick="App.sendChat()">Invia</button>
               </div>
-            </div>`;
-          }).join('') : '<div class="text-muted text-center py-4">Nessun messaggio ancora. Scrivi il primo!</div>'}
-        </div>
-        <div class="card-footer">
-          <div class="input-group">
-            <input type="text" id="chat-input" data-fkey="chat-input" class="form-control" placeholder="Scrivi un messaggio…"/>
-            <button class="btn btn-primary" onclick="App.sendChat()">Invia</button>
-          </div>
+            </div>
+          </section>
         </div>
       </div>`;
 
-    $('chat-input')?.addEventListener('keydown', e => {
-      if (e.key === 'Enter') { e.preventDefault(); sendChat(); }
-    });
+    const input = $('chat-input');
+    if (input) {
+      input.value = chatDrafts[chatConv] || '';
+      input.addEventListener('input', () => { chatDrafts[chatConv] = input.value; });
+      input.addEventListener('keydown', e => {
+        if (e.key === 'Enter') { e.preventDefault(); sendChat(); }
+      });
+    }
+    const box = $('chat-messages');
+    if (box) box.scrollTop = (opts.bottom || atBottom) ? box.scrollHeight : keepTop;
   }
 
   function scrollChatToBottom() {
@@ -1929,17 +2046,27 @@
     const input = $('chat-input');
     const body = input?.value.trim();
     if (!body) return;
-    input.value = '';
+    input.value = ''; chatDrafts[chatConv] = '';
+    const conv = chatConv;
     try {
-      await DB.sendChatMessage(body);
+      await DB.sendChatMessage(body, conv === 'group' ? null : conv);
       chatMessages = await DB.getChatMessages();
-      renderChat();
-      scrollChatToBottom();
+      chatMarkRead(conv);
+      renderChat({ bottom: true });
       $('chat-input')?.focus();
     } catch (e) {
-      UI.toast('Errore invio messaggio: ' + e.message, 'danger');
+      const ci = $('chat-input'); if (ci) { ci.value = body; chatDrafts[conv] = body; }
+      UI.toast(/recipient_id|chat_reads/.test(e.message || '')
+        ? 'Messaggi privati non ancora attivi: esegui nel SQL Editor di Supabase la migration 20261119000000_chat_private.sql'
+        : 'Errore invio messaggio: ' + e.message, 'danger');
     }
   }
+
+  // Tornando sulla scheda del browser con la chat aperta, i messaggi arrivati si leggono subito
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && currentTarget === 'chat' && dataLoadedGlobal()) { chatMarkRead(chatConv); updateChatBadge(); renderChat(); }
+  });
+  const dataLoadedGlobal = () => !!(session && session.user);
 
   // ── 16. NOTIFICHE ──────────────────────────────────────────────────
   function renderNotifBell() {
@@ -1999,7 +2126,7 @@
     setCalled, setPoolNote, closePoolRow,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, filterPool, showAllPool, poolSet, poolReset,
-    sendChat, openNotification,
+    sendChat, chatOpen, openNotification,
     impersonate: id => Auth.impersonate(id),
   };
 
