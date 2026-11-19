@@ -140,7 +140,7 @@ const ColFilter = (() => {
         ${s.sorts.length > 1 ? '<button type="button" data-act="nosortall">Rimuovi tutti gli ordinamenti</button>' : ''}
         ${otherSorts > 0 ? '<div class="ec-cf-hint">Gli ordinamenti si sommano: questa colonna spareggia quelle ordinate prima.</div>' : ''}
       </div>
-      <input type="search" class="form-control form-control-sm ec-cf-search" placeholder="Cerca valore…" aria-label="Cerca valore" autocomplete="off"/>
+      <input type="search" class="form-control ec-cf-search" placeholder="Cerca valore (es. numero pratica)…" aria-label="Cerca valore" autocomplete="off"/>
       <label class="ec-cf-all"><input type="checkbox" data-act="all"/> <span>Seleziona tutto</span></label>
       <div class="ec-cf-list" role="group" aria-label="Valori"></div>
       <div class="ec-cf-foot">
@@ -179,12 +179,20 @@ const ColFilter = (() => {
         syncAllBox();
       }
     });
-    pop.querySelector('.ec-cf-search').addEventListener('input', e => { cur.q = e.target.value; renderList(); });
+    // Come in Excel: cercando, restano selezionati solo i valori trovati (cancellando la ricerca si ripristina la selezione precedente)
+    pop.querySelector('.ec-cf-search').addEventListener('input', e => {
+      cur.q = e.target.value;
+      if (cur.q.trim()) {
+        if (!cur.saved) cur.saved = new Set(cur.checked);
+        cur.checked = new Set(visible());
+      } else if (cur.saved) { cur.checked = cur.saved; cur.saved = null; }
+      renderList();
+    });
 
     const rc = btn.getBoundingClientRect();
-    const w = 264;
+    const w = 340;
     pop.style.left = Math.max(8, Math.min(rc.left, window.innerWidth - w - 8)) + 'px';
-    pop.style.top = Math.min(rc.bottom + 4, Math.max(8, window.innerHeight - 440)) + 'px';
+    pop.style.top = Math.min(rc.bottom + 4, Math.max(8, window.innerHeight - 600)) + 'px';
 
     document.addEventListener('mousedown', onOutside, true);
     document.addEventListener('keydown', onKey, true);
