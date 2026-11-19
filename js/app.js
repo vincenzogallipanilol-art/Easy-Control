@@ -1120,7 +1120,9 @@
           <select class="form-select form-select-sm ec-status-select" data-fkey="st:${esc(pid)}" ${off}
             aria-label="Stato pratica ${esc(pid)}" onchange="App.setStatus(this)">${statusOptions(st)}</select>
         </td>
-        <td class="ec-col-id">${UI.praticaLink(pid)}</td>
+        <td class="ec-col-id">${UI.praticaLink(pid)}${canSeeAll && p.id ? `
+          <select class="form-select form-select-sm ec-move" data-practice="${esc(p.id)}" title="Sposta a un altro collega" aria-label="Sposta pratica ${esc(pid)}"
+            onmouseenter="App.moveFill(this)" onfocus="App.moveFill(this)" onchange="App.moveFromPlan(this)"><option value="">⇄</option></select>` : ''}</td>
         ${cells}
       </tr>`;
   }
@@ -1741,26 +1743,42 @@
     const PAGE = 200;
     const regular = rows.filter(r => !r.sally), sally = rows.filter(r => r.sally);
     const assignOptions = colleagues.filter(c => c.active).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+    _poolIds = rows.map(r => r.p.id);
     const poolRow = (r, showAssign) => `
-      <tr class="pool-row">
+      <tr class="pool-row${poolSel.has(r.p.id) ? ' table-active' : ''}">
+        <td class="w-1"><input type="checkbox" class="form-check-input m-0 pool-chk" data-practice="${r.p.id}" ${poolSel.has(r.p.id) ? 'checked' : ''}
+          onclick="App.poolToggle(this, event)" aria-label="Seleziona pratica ${esc(r.pid)}"/></td>
         <td class="font-monospace small">${UI.praticaLink(r.pid)}</td>
         <td>${esc(r.cognome)} ${esc(r.nome)}</td>
         <td class="text-muted small">${esc(r.tipologia) || '—'}</td>
         <td>${UI.statoBadge(esc(r.stato))}</td>
         <td class="text-muted small">${REASON_LABELS[r.reason] || '—'}</td>
-        ${showAssign ? `<td>
+        ${showAssign ? '' : `<td class="text-muted small">${esc(r.agente) || '—'}</td>`}
+        <td>
           <select class="form-select form-select-sm" style="width:auto" data-practice="${r.p.id}"
             onchange="App.assignFromPool(this.dataset.practice, this.value)">
             <option value="">— assegna —</option>${assignOptions}
           </select>
-        </td>` : `<td class="text-muted small">${esc(r.agente) || '—'}</td>`}
+        </td>
       </tr>`;
+    const chkAll = `<th class="w-1"><input type="checkbox" class="form-check-input m-0" id="pool-chk-all" onclick="App.poolToggleAll(this)"
+      ${rows.length && rows.every(r => poolSel.has(r.p.id)) ? 'checked' : ''} aria-label="Seleziona tutte le pratiche filtrate"/></th>`;
+    const bar = poolSel.size ? `
+      <div class="card-body py-2 border-bottom d-flex flex-wrap align-items-center gap-2 ec-bulk-bar">
+        <strong>${fmt(poolSel.size)} selezionate</strong>
+        <select class="form-select form-select-sm" style="width:auto" id="pool-bulk-to">
+          <option value="">— assegna a —</option>${assignOptions}
+        </select>
+        <button type="button" class="btn btn-sm btn-primary" onclick="App.poolBulkAssign()">Assegna</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="App.poolClearSel()">Deseleziona</button>
+      </div>` : '';
     const shown = l => _poolShowAll ? l : l.slice(0, PAGE);
     return `
+      ${bar}
       ${regular.length ? `
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr>${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}<th>Assegna a</th></tr></thead>
+            <thead><tr>${chkAll}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}<th>Assegna a</th></tr></thead>
             <tbody>${shown(regular).map(r => poolRow(r, true)).join('')}</tbody>
           </table>
         </div>
@@ -1768,11 +1786,11 @@
       ${sally.length ? `
         <div class="card-header bg-danger-lt border-top">
           <h3 class="card-title text-danger">Agenti Sally — ${fmt(sally.length)} pratiche</h3>
-          <div class="card-options"><small class="text-muted">Pool separata, non agganciata a nessun collega</small></div>
+          <div class="card-options"><small class="text-muted">Pratiche di agenti dedicati, non ancora assegnate</small></div>
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr>${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('agente', 'Agente attuale')}</tr></thead>
+            <thead><tr>${regular.length ? '<th class="w-1"></th>' : chkAll}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('agente', 'Agente attuale')}<th>Assegna a</th></tr></thead>
             <tbody>${shown(sally).map(r => poolRow(r, false)).join('')}</tbody>
           </table>
         </div>
@@ -1833,6 +1851,60 @@
   function filterPool(term) { poolFilter.q = term || ''; _poolShowAll = false; poolRenderSoon(); }
   function poolSet(field, value) { poolFilter[field] = value || ''; _poolShowAll = false; withFocus(renderPool); }
   function poolReset() { Object.assign(poolFilter, { q: '', st: '', tip: '', ag: '' }); ColFilter.clear('pool:'); _poolShowAll = false; renderPool(); }
+
+  let poolSel = new Set(), _poolIds = [], _poolLast = null;
+  function poolToggle(el, ev) {
+    const id = el.dataset.practice;
+    if (ev && ev.shiftKey && _poolLast && _poolLast !== id) {
+      const a = _poolIds.indexOf(_poolLast), b = _poolIds.indexOf(id);
+      if (a > -1 && b > -1) for (const x of _poolIds.slice(Math.min(a, b), Math.max(a, b) + 1)) el.checked ? poolSel.add(x) : poolSel.delete(x);
+    } else if (el.checked) poolSel.add(id); else poolSel.delete(id);
+    _poolLast = id;
+    withFocus(renderPool);
+  }
+  function poolToggleAll(el) {
+    for (const id of _poolIds) el.checked ? poolSel.add(id) : poolSel.delete(id);
+    withFocus(renderPool);
+  }
+  function poolClearSel() { poolSel.clear(); _poolLast = null; renderPool(); }
+  async function poolBulkAssign() {
+    const to = $('pool-bulk-to')?.value;
+    if (!to) { UI.toast('Scegli il collega a cui assegnare', 'warning'); return; }
+    const ids = [...poolSel].filter(id => practiceById[id]);
+    if (!ids.length) return;
+    try {
+      const { data: { user } } = await db.auth.getUser();
+      const now = new Date().toISOString();
+      const rows = ids.map(id => ({ practice_id: id, report_id: activeReport.id, colleague_id: to, assigned_by: user.id, is_manual: true, assigned_at: now }));
+      await DB.bulkUpsertAssignments(rows);
+      for (const r of rows) assignments[r.practice_id] = { ...assignments[r.practice_id], ...r };
+      poolSel.clear(); _poolLast = null;
+      UI.toast(`${rows.length} pratiche assegnate a ${colName(to)}`, 'success');
+      fullRenderSoon();
+    } catch (e) { UI.toast('Errore assegnazione: ' + e.message, 'danger'); }
+  }
+
+  // Top/admin: sposta una pratica dalla scheda di un collega a un altro
+  function moveFill(sel) {
+    if (sel.dataset.filled) return;
+    const cur = sel.closest('[data-colleague]')?.dataset.colleague;
+    sel.insertAdjacentHTML('beforeend', colleagues.filter(c => c.active && c.id !== cur)
+      .map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join(''));
+    sel.dataset.filled = '1';
+  }
+  async function moveFromPlan(sel) {
+    const to = sel.value;
+    if (!to) return;
+    const id = sel.dataset.practice, tr = sel.closest('tr');
+    try {
+      const { data: { user } } = await db.auth.getUser();
+      const row = { practice_id: id, report_id: activeReport.id, colleague_id: to, assigned_by: user.id, is_manual: true, assigned_at: new Date().toISOString() };
+      await DB.upsertAssignment(row);
+      assignments[id] = { ...assignments[id], ...row };
+      UI.toast(`Pratica ${tr?.dataset.pid || ''} spostata a ${colName(to)}`, 'success');
+      fullRenderSoon();
+    } catch (e) { sel.value = ''; UI.toast('Errore spostamento: ' + e.message, 'danger'); }
+  }
 
   async function assignFromPool(practiceId, colleagueId) {
     if (!colleagueId) return;
@@ -2125,7 +2197,7 @@
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
     setCalled, setPoolNote, closePoolRow,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
-    assignFromPool, filterPool, showAllPool, poolSet, poolReset,
+    assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, filterPool, showAllPool, poolSet, poolReset,
     sendChat, chatOpen, openNotification,
     impersonate: id => Auth.impersonate(id),
   };

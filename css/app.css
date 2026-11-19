@@ -691,3 +691,13 @@ textarea.ec-mod-preview { min-height: 240px; width: 100%; resize: vertical; }
 .ec-sally-rev td { vertical-align: top; }
 .ec-sally-opt { display: flex; align-items: center; gap: .4rem; margin: 0 0 .15rem; font-size: .8125rem; cursor: pointer; }
 .ec-sally-opt.is-off { color: #8a97a8; cursor: default; }
+
+/* Sposta pratica (top/admin) e selezione multipla pool */
+.ec-grid td.ec-col-id { min-width: 132px; white-space: nowrap; overflow: visible; }
+.ec-col-id .ec-move {
+  display: inline-block; width: 26px; height: 24px; margin-left: 6px; padding: 0; vertical-align: middle;
+  appearance: none; -webkit-appearance: none; background-image: none; text-align: center; text-align-last: center;
+  font-size: 14px; line-height: 1; cursor: pointer; border-radius: 6px;
+}
+.ec-col-id .ec-move:hover, .ec-col-id .ec-move:focus { background: #eef3fb; border-color: #206bc4; }
+.ec-bulk-bar { background: var(--tblr-primary-lt, #e9f0fb); }
