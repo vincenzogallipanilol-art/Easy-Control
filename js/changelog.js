@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.26.1', date: '2026-11-20', items: [
+    'Dashboard utente: "Controllate oggi" (e il periodo scelto) ora conta solo le tue pratiche controllate, non quelle di tutto il team.',
+  ] },
   { v: '1.26.0', date: '2026-11-20', items: [
     'Piano di lavoro: di default mostra solo le pratiche "Da lavorare", così il piano resta sempre pulito. "Tutte" e gli altri chip mostrano le già lavorate; cercando una pratica o usando i filtri colonna si cerca in tutte.',
     'Dashboard, box dei colleghi: oltre ad "Assegnate" (tutte le pratiche assegnate, anche chiuse o già nei pool) ora ci sono "Nel piano" e "Da lavorare", che combaciano con il piano di lavoro del collega.',
