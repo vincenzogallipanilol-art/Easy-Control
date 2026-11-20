@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.27.0', date: '2026-11-21', items: [
+    'Admin: nuovo registro "Sally · pratiche già controllate". Le pratiche degli agenti migrati su Sally già controllate (Conforme / Richiesta integrazioni) non rientrano più nei nuovi report, così non vengono ricontrollate. Il registro si riempie da solo, si possono aggiungere o togliere ID a mano e si vede chi e quando ha controllato ogni pratica.',
+  ] },
   { v: '1.26.1', date: '2026-11-20', items: [
     'Dashboard utente: "Controllate oggi" (e il periodo scelto) ora conta solo le tue pratiche controllate, non quelle di tutto il team.',
   ] },
