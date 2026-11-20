@@ -160,6 +160,27 @@ const DB = (() => {
   async function getAssignments(reportId) {
     return fetchAll(() => db.from('assignments').select('*').eq('report_id', reportId));
   }
+  // Pratiche libere adatte a un collega (anche per utenti semplici, che per RLS non vedono il pool)
+  async function getPoolCandidates(reportId, tipologie, agents) {
+    const out = [];
+    for (let from = 0; from < 6000; from += 1000) {
+      const { data, error } = await db.rpc('pool_candidates', {
+        p_report_id: reportId, p_tipologie: tipologie, p_agents: agents, p_from: from, p_to: from + 999,
+      });
+      if (error) throw error;
+      out.push(...(data || []));
+      if (!data || data.length < 1000) break;
+    }
+    return out;
+  }
+  // Assegna solo le pratiche ancora libere: non sovrascrive mai un'assegnazione esistente
+  async function claimPractices(colleagueId, reportId, practiceIds) {
+    const { data, error } = await db.rpc('claim_practices', {
+      p_colleague_id: colleagueId, p_report_id: reportId, p_practice_ids: practiceIds,
+    });
+    if (error) throw error;
+    return data || [];
+  }
   async function upsertAssignment(assignment) {
     const { error } = await db.from('assignments')
       .upsert(assignment, { onConflict: 'practice_id' });
@@ -387,7 +408,7 @@ const DB = (() => {
     getColleagues, upsertColleague, deleteColleague,
     getReports, getActiveReport, createReport,
     insertPractices, getPractices,
-    getAssignments, upsertAssignment, bulkUpsertAssignments, deleteAutoAssignments,
+    getAssignments, getPoolCandidates, claimPractices, upsertAssignment, bulkUpsertAssignments, deleteAutoAssignments,
     getDistinctTipologie, getDistinctAgenti,
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser,

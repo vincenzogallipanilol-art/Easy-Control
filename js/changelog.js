@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.25.0', date: '2026-11-20', items: [
+    'Quando le pratiche del piano di lavoro sono finite compare il pulsante "Richiedi altre pratiche": assegna al collega un nuovo gruppo di pratiche libere del pool, adatte alle sue tipologie, agli stati e agli agenti configurati. Non toglie mai pratiche ad altri.',
+  ] },
   { v: '1.24.0', date: '2026-11-20', items: [
     'Pool Audit / xFlat / Help: la colonna "Inviata da" indica chi ha inserito lo stato (e il piano di lavoro di provenienza).',
     'Nuovo pulsante "Integra": il Top sceglie lo stato corretto (Conforme o Richiesta integrazioni), scrive la nota e la pratica esce dal pool e torna nel piano di chi l\'aveva inviata, con una notifica. "Chiudi" resta per rimuoverla senza rimandarla.',

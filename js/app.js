@@ -1221,6 +1221,7 @@
               placeholder="Cerca pratica, nome, agente…" value="${esc(f.q)}" aria-label="Cerca nel piano" oninput="App.planSearch(this)"/>
           </div>
         </div>
+        <div data-plan-refill="${cid}"></div>
         ${grid}
       </div>
       <div data-plan-call="${cid}">${callPoolHtml(calls, colleagueId)}</div>`;
@@ -1254,6 +1255,71 @@
       Object.entries(UI.WORK_STATUSES).map(([k, s]) => chip(k, s.short, isPool(k) ? (sent[k] || 0) : (counts[k] || 0), s.hex)).join('') +
       (ColFilter.active('plan:' + card.dataset.plan)
         ? '<button type="button" class="ec-chip ec-chip--clear" onclick="App.planClearCols(this)">✕ Cancella filtri colonne</button>' : '');
+    const rf = card.querySelector('[data-plan-refill]');
+    if (rf) { const h = refillHtml(card.dataset.plan); if (rf.innerHTML !== h) rf.innerHTML = h; }
+  }
+
+  // Piano finito: compare il pulsante per richiedere altre pratiche dal pool
+  function planFinished(cid) {
+    if (!dataLoaded || !activeReport) return false;
+    const c = colleagues.find(x => x.id === cid);
+    if (!c || !c.active) return false;
+    return !planData(cid).rows.some(p => workState(p.pratica_id).phase === 'none');
+  }
+  function refillHtml(cid) {
+    if (!canEditColleague(cid) || !planFinished(cid)) return '';
+    const mine = cid === myColleagueId;
+    return `
+      <div class="alert alert-success m-3 d-flex align-items-center gap-3 flex-wrap">
+        <div class="flex-fill"><strong>${mine ? 'Hai finito le pratiche del tuo piano.' : 'Le pratiche di questo piano sono finite.'}</strong>
+          Puoi richiedere altre pratiche libere dal pool, adatte alle tipologie e agli stati configurati.</div>
+        <button type="button" class="btn btn-success" onclick="App.refillPlan('${esc(cid)}')">Richiedi altre pratiche</button>
+      </div>`;
+  }
+  const refilling = new Set();
+  async function refillPlan(cid) {
+    if (refilling.has(cid) || !canEditColleague(cid) || !activeReport || !planFinished(cid)) return;
+    const c = colleagues.find(x => x.id === cid);
+    if (!c) return;
+    refilling.add(cid);
+    const btn = document.querySelector(`[data-plan-refill="${CSS.escape(cid)}"] button`);
+    if (btn) { btn.disabled = true; btn.textContent = 'Ricerca in corso…'; }
+    try {
+      const nrm = x => (x || '').toLowerCase().trim();
+      const dedicated = Engine.dedicatedFromConfig(config, agentExclusions);
+      const tips = [...new Set([...(c.primary_tipologie || []), ...(c.secondary_tipologie || [])].map(nrm))].filter(Boolean);
+      const agents = ((dedicated[cid] || {}).agents || []).map(nrm);
+      const seenPid = new Set();
+      const cand = (await DB.getPoolCandidates(activeReport.id, tips, agents)).filter(p => {
+        if (!p.pratica_id) return true;
+        if (seenPid.has(p.pratica_id) || (practiceByPid[p.pratica_id] && practiceByPid[p.pratica_id].id !== p.id)) return false;   // una pratica una volta sola
+        seenPid.add(p.pratica_id); return true;
+      });
+      const batch = Math.max(1, c.min_quota || 20);
+      const { autoAssignments } = Engine.distribute(cand, [{ ...c, max_quota: batch }], colleagueStateFilters, 1, [], [], null,
+        { lockedPids: engineOpts().lockedPids, baseQuotas: {}, dedicated });
+      const pick = autoAssignments.filter(a => a.colleague_id === cid);
+      if (!pick.length) { UI.toast('Nessuna pratica libera adatta a te nel pool al momento', 'info'); return; }
+      if (!UI.confirm(`Aggiungere ${pick.length} pratiche al piano di lavoro?`)) return;
+      const got = await DB.claimPractices(cid, activeReport.id, pick.map(a => a.practice_id));
+      const byId = new Map(cand.map(p => [p.id, p]));
+      for (const r of got) {
+        assignments[r.practice_id] = r;
+        const p = byId.get(r.practice_id);
+        if (p && !practiceById[p.id]) practices.push(p);
+      }
+      indexPractices();
+      UI.toast(got.length === pick.length ? `${got.length} pratiche aggiunte al piano`
+        : `${got.length} pratiche aggiunte (le altre erano appena state prese da qualcun altro)`, got.length ? 'success' : 'info');
+      fullRenderSoon();
+    } catch (e) {
+      UI.toast(DB.isMissingSchema(e)
+        ? 'Database da aggiornare: esegui la migration 20261120000000_refill_plan.sql nel SQL Editor di Supabase.'
+        : 'Errore: ' + e.message, 'danger');
+    } finally {
+      refilling.delete(cid);
+      document.querySelectorAll('[data-plan]').forEach(card => { if (card.dataset.plan === cid) renderChips(card); });
+    }
   }
 
   // Il piano puo' avere migliaia di righe: se ne disegnano a blocchi (scroll infinito)
@@ -2287,7 +2353,7 @@
   window.App = window.AppRuntime = {
     getPractices: () => practices,
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
-    setCalled, setPoolNote, closePoolRow, openIntegra,
+    setCalled, setPoolNote, closePoolRow, openIntegra, refillPlan,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, filterPool, showAllPool, poolSet, poolReset,
     sendChat, chatOpen, openNotification,
