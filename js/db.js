@@ -204,6 +204,27 @@ const DB = (() => {
     if (error) throw error;
     return data;
   }
+  // Registro pratiche gia' controllate su Sally (solo Admin)
+  async function sallySync(agents, colleagues) {
+    const { data, error } = await db.rpc('sally_sync', { p_agents: agents, p_colleagues: colleagues });
+    if (error) throw error;
+    return data || 0;
+  }
+  async function getSallyChecked() {
+    return fetchKeyset(() => db.from('sally_checked').select('*'), 'pratica_id');
+  }
+  async function addSallyChecked(rows) {
+    for (let i = 0; i < rows.length; i += 500) {
+      const { error } = await db.from('sally_checked').upsert(rows.slice(i, i + 500), { onConflict: 'pratica_id' });
+      if (error) throw error;
+    }
+  }
+  async function deleteSallyChecked(ids) {
+    for (let i = 0; i < ids.length; i += 200) {
+      const { error } = await db.from('sally_checked').delete().in('pratica_id', ids.slice(i, i + 200));
+      if (error) throw error;
+    }
+  }
   async function addAgentExclusion(agentName) {
     const { data, error } = await db.from('agent_exclusions')
       .insert({ agent_name: agentName }).select().single();
@@ -413,6 +434,7 @@ const DB = (() => {
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser,
     getAgentExclusions, addAgentExclusion, deleteAgentExclusion,
+    sallySync, getSallyChecked, addSallyChecked, deleteSallyChecked,
     getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, getCheckSeries, notifyMentions,
     isMissingSchema,
     getNotifications, markNotificationRead, markAllNotificationsRead,
