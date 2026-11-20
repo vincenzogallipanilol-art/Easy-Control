@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"/>
-  <link rel="stylesheet" href="css/app.css?v=1.26.1"/>
-  <script src="js/theme.js?v=1.26.1"></script>
+  <link rel="stylesheet" href="css/app.css?v=1.27.0"/>
+  <script src="js/theme.js?v=1.27.0"></script>
 </head>
 <body class="antialiased">
 
@@ -318,6 +318,34 @@
             </div>
           </div>
 
+          <!-- Registro Sally: pratiche gia' controllate (solo Admin) -->
+          <div class="card mb-4">
+            <div class="card-header">
+              <h3 class="card-title">Sally · pratiche già controllate <span class="badge bg-secondary-lt ms-2" id="sally-reg-count">0</span></h3>
+              <div class="card-options">
+                <button class="btn btn-outline-primary btn-sm" onclick="Admin.sallyRegSync()">Aggiorna dai controlli</button>
+              </div>
+            </div>
+            <div class="card-body border-bottom">
+              <p class="text-muted small mb-2">Queste pratiche non vengono mai inserite nei nuovi report (gli agenti migrati su Sally non si aggiornano più su EGG). Si riempie da solo con le pratiche Conforme / Richiesta integrazioni lavorate dal collega agganciato agli agenti Sally; qui puoi aggiungere ID a mano o toglierne.</p>
+              <div class="row g-2 align-items-start">
+                <div class="col-md-6"><textarea id="sally-reg-ids" class="form-control font-monospace" rows="3" placeholder="ID pratica da aggiungere (uno per riga o separati da virgola/spazio)"></textarea></div>
+                <div class="col-md-3"><input type="text" id="sally-reg-agent" class="form-control" placeholder="Agente (facoltativo)"/></div>
+                <div class="col-md-3"><button class="btn btn-primary w-100" onclick="Admin.sallyRegAdd()">Aggiungi al registro</button></div>
+              </div>
+            </div>
+            <div class="card-body py-2 border-bottom">
+              <input type="search" id="sally-reg-q" class="form-control" placeholder="Cerca per ID, agente o utente…" oninput="Admin.sallyRegRender()"/>
+            </div>
+            <div class="table-responsive">
+              <table class="table table-sm table-vcenter card-table">
+                <thead><tr><th>Pratica</th><th>Agente</th><th>Stato</th><th>Controllata il</th><th>Da</th><th>Origine</th><th></th></tr></thead>
+                <tbody id="sally-reg-tbody"><tr><td colspan="7" class="text-center text-muted py-3">Caricamento…</td></tr></tbody>
+              </table>
+            </div>
+            <div class="card-footer text-muted small" id="sally-reg-foot"></div>
+          </div>
+
           <!-- Utenti in attesa di approvazione -->
           <div class="card mb-4 border-warning" id="admin-pending-users-wrap" style="display:none">
             <div class="card-header bg-warning-lt">
@@ -479,21 +507,21 @@
 <!-- ── SCRIPTS ──────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/config.js?v=1.26.1"></script>
-<script src="js/supabase-client.js?v=1.26.1"></script>
-<script src="js/auth.js?v=1.26.1"></script>
-<script src="js/cache.js?v=1.26.1"></script>
-<script src="js/db.js?v=1.26.1"></script>
-<script src="js/engine.js?v=1.26.1"></script>
-<script src="js/realtime.js?v=1.26.1"></script>
-<script src="js/colfilter.js?v=1.26.1"></script>
-<script src="js/version.js?v=1.26.1"></script>
-<script src="js/changelog.js?v=1.26.1"></script>
-<script src="js/updates.js?v=1.26.1"></script>
-<script src="js/ui.js?v=1.26.1"></script>
-<script src="js/modelli.js?v=1.26.1"></script>
-<script src="js/admin.js?v=1.26.1"></script>
-<script src="js/app.js?v=1.26.1"></script>
+<script src="js/config.js?v=1.27.0"></script>
+<script src="js/supabase-client.js?v=1.27.0"></script>
+<script src="js/auth.js?v=1.27.0"></script>
+<script src="js/cache.js?v=1.27.0"></script>
+<script src="js/db.js?v=1.27.0"></script>
+<script src="js/engine.js?v=1.27.0"></script>
+<script src="js/realtime.js?v=1.27.0"></script>
+<script src="js/colfilter.js?v=1.27.0"></script>
+<script src="js/version.js?v=1.27.0"></script>
+<script src="js/changelog.js?v=1.27.0"></script>
+<script src="js/updates.js?v=1.27.0"></script>
+<script src="js/ui.js?v=1.27.0"></script>
+<script src="js/modelli.js?v=1.27.0"></script>
+<script src="js/admin.js?v=1.27.0"></script>
+<script src="js/app.js?v=1.27.0"></script>
 
 </body>
 </html>
