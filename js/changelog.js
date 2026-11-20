@@ -1,5 +1,9 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.24.0', date: '2026-11-20', items: [
+    'Pool Audit / xFlat / Help: la colonna "Inviata da" indica chi ha inserito lo stato (e il piano di lavoro di provenienza).',
+    'Nuovo pulsante "Integra": il Top sceglie lo stato corretto (Conforme o Richiesta integrazioni), scrive la nota e la pratica esce dal pool e torna nel piano di chi l\'aveva inviata, con una notifica. "Chiudi" resta per rimuoverla senza rimandarla.',
+  ] },
   { v: '1.23.0', date: '2026-11-19', items: [
     'Avviso automatico quando è disponibile una nuova versione: basta un clic su "Aggiorna ora", senza F5.',
     'Dopo l\'aggiornamento compare questo riepilogo delle novità. Si riapre cliccando sulla versione sopra "Esci".',

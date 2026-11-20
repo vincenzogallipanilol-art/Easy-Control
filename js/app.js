@@ -1063,6 +1063,12 @@
   const planView  = {};  // colleague_id -> { rows, filtered, limit } (righe disegnate a blocchi)
   const dash = '<span class="text-muted">—</span>';
   const cell = v => `<td title="${esc(v)}">${v ? esc(v) : dash}</td>`;
+  // Chi ha inserito lo stato (utente) e, se diverso, il piano di lavoro da cui arriva
+  function senderCell(w) {
+    const who = userName(w.set_by), plan = colName(w.colleague_id);
+    const sub = plan && plan !== who && !who.toLowerCase().includes(plan.toLowerCase()) ? `<div class="text-muted small">piano di ${esc(plan)}</div>` : '';
+    return `<td title="${esc(who)}"><strong>${esc(who)}</strong>${sub}</td>`;
+  }
 
   // Chi puo' modificare il piano di un collega: Admin tutti; Top se stesso e gli utenti semplici;
   // un utente semplice solo il proprio.
@@ -1538,6 +1544,89 @@
     }
   }
 
+  // Integra: il Top gestisce la pratica (Audit / xFlat / Help) e la rimanda a chi l'ha inviata con lo stato corretto
+  function closeIntegra() { const m = $('ec-integra'); if (m) m.remove(); document.removeEventListener('keydown', onIntegraKey, true); }
+  const onIntegraKey = e => { if (e.key === 'Escape') closeIntegra(); };
+  function openIntegra(btn) {
+    const pid = btn.closest('tr').dataset.pid, w = work[pid];
+    if (!w) return;
+    closeIntegra();
+    const from = userName(w.set_by), plan = colName(w.colleague_id);
+    const wrap = document.createElement('div');
+    wrap.className = 'ec-modal'; wrap.id = 'ec-integra'; wrap.dataset.pid = pid;
+    wrap.setAttribute('role', 'dialog'); wrap.setAttribute('aria-modal', 'true');
+    wrap.innerHTML = `
+      <div class="ec-modal-box ec-log-box">
+        <div class="ec-modal-head">
+          <h3 class="m-0 fs-3">Integra pratica ${esc(pid)}</h3>
+          <button type="button" class="btn-close ms-auto" data-close aria-label="Chiudi"></button>
+        </div>
+        <div class="ec-log-body">
+          <p class="mb-2"><strong>${esc(w.cognome)} ${esc(w.nome)}</strong> — inviata da <strong>${esc(from)}</strong>${plan && !from.toLowerCase().includes(plan.toLowerCase()) ? ` (piano di ${esc(plan)})` : ''} come ${UI.workBadge(w.status)}</p>
+          ${w.note ? `<div class="ec-src-note mb-3" style="max-width:none;white-space:normal">Nota di invio: ${esc(w.note)}</div>` : ''}
+          <label class="form-label">Stato corretto</label>
+          <select class="form-select mb-3" id="integra-st">
+            <option value="conforme">${esc(UI.WORK_STATUSES.conforme.label)}</option>
+            <option value="integrazioni">${esc(UI.WORK_STATUSES.integrazioni.label)}</option>
+          </select>
+          <label class="form-label">Nota per ${esc(from)} <span class="text-muted" id="integra-req"></span></label>
+          <textarea class="form-control" id="integra-note" rows="3" maxlength="700" placeholder="Esito / cosa è stato fatto…">${esc(w.pool_note || '')}</textarea>
+          <div class="text-muted small mt-2">La pratica esce dal pool e torna nel piano di lavoro di ${esc(plan || from)} con lo stato scelto; ${esc(from)} riceve una notifica.</div>
+        </div>
+        <div class="ec-log-foot">
+          <button type="button" class="btn me-2" data-close>Annulla</button>
+          <button type="button" class="btn btn-primary" id="integra-ok">Integra e rimanda</button>
+        </div>
+      </div>`;
+    const sync = () => { $('integra-req').textContent = UI.WORK_STATUSES[$('integra-st').value].note ? '(obbligatoria)' : '(facoltativa)'; };
+    wrap.addEventListener('click', e => {
+      if (e.target === wrap || e.target.closest('[data-close]')) closeIntegra();
+      else if (e.target.closest('#integra-ok')) confirmIntegra(pid);
+    });
+    wrap.addEventListener('change', e => { if (e.target.id === 'integra-st') sync(); });
+    document.addEventListener('keydown', onIntegraKey, true);
+    document.body.appendChild(wrap);
+    sync();
+    $('integra-note').focus();
+  }
+  async function confirmIntegra(pid) {
+    const w = work[pid];
+    if (!w) { closeIntegra(); return; }
+    const st = $('integra-st').value, top = $('integra-note').value.trim(), def = UI.WORK_STATUSES[st];
+    if (def.note && !top) { UI.toast(`La nota è obbligatoria per "${def.label}"`, 'warning'); $('integra-note').focus(); return; }
+    const me = profile.full_name || profile.email, from = userName(w.set_by);
+    const note = `Gestita da ${me}${top ? ': ' + top : ''} (${(UI.WORK_STATUSES[w.status] || {}).label || w.status} di ${from}${w.note ? ': ' + w.note : ''})`.slice(0, 1000);
+    const ok = $('integra-ok'); ok.disabled = true;
+    try {
+      const p = practiceByPid[pid];
+      // la pratica torna nel piano di chi l'ha inviata
+      if (p && w.colleague_id && activeReport && assignments[p.id]?.colleague_id !== w.colleague_id) {
+        const row = { practice_id: p.id, report_id: activeReport.id, colleague_id: w.colleague_id, assigned_by: profile.id, is_manual: true, assigned_at: new Date().toISOString() };
+        await DB.upsertAssignment(row);
+        assignments[p.id] = { ...assignments[p.id], ...row };
+      }
+      const row = await DB.setPracticeWork({
+        praticaId: pid, status: st, note,
+        reportId: (p && activeReport?.id) || w.report_id || null,
+        colleagueId: w.colleague_id || null,
+        practice: p || { cognome: w.cognome, nome: w.nome, tipologia: w.tipologia, istituto_finanziario: w.istituto_finanziario, agente_attuale: w.agente_attuale },
+      });
+      if (row) work[pid] = row;
+      if (w.set_by && w.set_by !== profile.id) {
+        DB.notifyMentions([w.set_by], {
+          title: `${me} ha gestito la pratica ${pid}`,
+          body: `${def.label}${top ? ': ' + top : ''}`, praticaId: pid,
+        }).catch(() => { /* non bloccante */ });
+      }
+      closeIntegra();
+      softRender(); refreshStatsSoon();
+      UI.toast(`Pratica ${pid} integrata e rimandata a ${colName(w.colleague_id) || from} come "${def.label}"`, 'success');
+    } catch (e) {
+      ok.disabled = false;
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
   // ── 11. PIANO DI LAVORO PERSONALE / SCHEDA COLLEGA ─────────────────
   function renderMine() {
     const el = $('mine-content');
@@ -1651,7 +1740,7 @@
     tipologia: r => r.tipologia, stato: r => r.stato, agente: r => r.agente,
     motivo: r => REASON_LABELS[r.reason] || '',
     istituto: r => (r.w && r.w.istituto_finanziario) || '',
-    operatore: r => r.w ? (colName(r.w.colleague_id) || userName(r.w.set_by) || '') : '',
+    operatore: r => r.w ? (userName(r.w.set_by) || colName(r.w.colleague_id) || '') : '',
     segnalata: r => r.w ? new Date(r.w.set_at).toLocaleDateString('it-IT') : '',
   };
   const POOL_CF_SORT = { segnalata: r => r.w ? r.w.set_at : '' };
@@ -1807,7 +1896,7 @@
         <table class="ec-grid ec-grid--pool">
           <thead><tr>
             ${pth('pid', 'Pratica')}${pth('cognome', 'Cognome')}${pth('nome', 'Nome')}<th>Note</th>${pth('tipologia', 'Tipologia')}${pth('istituto', 'Istituto Finanziario')}
-            ${pth('agente', 'Agente Attuale')}${pth('stato', 'Stato Attuale')}${pth('operatore', 'Operatore')}${pth('segnalata', 'Segnalata')}
+            ${pth('agente', 'Agente Attuale')}${pth('stato', 'Stato Attuale')}${pth('operatore', calls ? 'Operatore' : 'Inviata da')}${pth('segnalata', 'Segnalata')}
             ${calls ? '<th>Chiamato</th><th>Note chiamata</th>' : '<th>Note gestione</th><th></th>'}
           </tr></thead>
           <tbody>
@@ -1818,7 +1907,7 @@
                 <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
                 ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
                 <td>${UI.statoBadge(esc(stato))}</td>
-                ${cell(colName(w.colleague_id) || userName(w.set_by))}
+                ${senderCell(w)}
                 <td>${new Date(w.set_at).toLocaleDateString('it-IT')}</td>
                 ${calls ? `
                 <td>
@@ -1838,7 +1927,10 @@
                     value="${esc(w.pool_note || '')}" placeholder="Esito / azioni…" maxlength="1000" autocomplete="off"
                     aria-label="Note gestione" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
                 </td>
-                <td><button type="button" class="btn btn-sm btn-outline-secondary" onclick="App.closePoolRow(this)">Chiudi</button></td>`}
+                <td class="text-nowrap">
+                  <button type="button" class="btn btn-sm btn-primary" onclick="App.openIntegra(this)" title="Segna come gestita e rimanda la pratica a chi l'ha inviata">Integra</button>
+                  <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="App.closePoolRow(this)" title="Rimuovi dal pool senza rimandarla">Chiudi</button>
+                </td>`}
               </tr>`).join('')}
           </tbody>
         </table>
@@ -2195,7 +2287,7 @@
   window.App = window.AppRuntime = {
     getPractices: () => practices,
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
-    setCalled, setPoolNote, closePoolRow,
+    setCalled, setPoolNote, closePoolRow, openIntegra,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, filterPool, showAllPool, poolSet, poolReset,
     sendChat, chatOpen, openNotification,
