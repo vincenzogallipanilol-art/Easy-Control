@@ -645,6 +645,25 @@
       for (const o of kept) { if (!seenIds.has(o.pratica_id)) { seenIds.add(o.pratica_id); uniq.push(o); } }
       const dupes = kept.length - uniq.length;
       rows.length = 0; rows.push(...uniq);
+      // Pratiche gia' controllate su Sally (registro Admin): non rientrano in alcun report
+      let sallySkipped = 0, sallyWarn = false;
+      try {
+        const nrm = x => (x || '').toLowerCase().trim();
+        const ded = Engine.dedicatedFromConfig(config, agentExclusions);
+        const ag = [], co = [];
+        for (const [cid, d] of Object.entries(ded)) for (const a of d.agents || []) { ag.push(nrm(a)); co.push(cid); }
+        if (ag.length) await DB.sallySync(ag, co);
+        const reg = new Set((await DB.getSallyChecked()).map(r => r.pratica_id));
+        if (reg.size) {
+          const keep = rows.filter(o => !reg.has(o.pratica_id));
+          sallySkipped = rows.length - keep.length;
+          rows.length = 0; rows.push(...keep);
+        }
+      } catch (e) {
+        if (!DB.isMissingSchema(e)) throw e;
+        sallyWarn = true;
+      }
+      if (!rows.length) throw new Error('Tutte le pratiche del file sono già controllate su Sally: nessuna da caricare');
       // ID generati qui: dopo l'inserimento non serve riscaricare le pratiche
       const localIds = typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function';
       if (localIds) rows.forEach(r => { r.id = crypto.randomUUID(); });
@@ -674,7 +693,8 @@
         }
       }
 
-      UI.toast(`Report caricato: ${fmt(rows.length)} pratiche${excluded ? ` (${fmt(excluded)} escluse per stato)` : ''}${dupes ? `, ${fmt(dupes)} duplicate ignorate` : ''}, ${fmt(autoAssignments.length)} assegnate`, 'success');
+      UI.toast(`Report caricato: ${fmt(rows.length)} pratiche${excluded ? ` (${fmt(excluded)} escluse per stato)` : ''}${dupes ? `, ${fmt(dupes)} duplicate ignorate` : ''}${sallySkipped ? `, ${fmt(sallySkipped)} già controllate su Sally escluse` : ''}, ${fmt(autoAssignments.length)} assegnate`, 'success');
+      if (sallyWarn) UI.toast('Registro Sally non attivo: esegui la migration 20261121000000_sally_checked.sql nel SQL Editor di Supabase.', 'warning');
     } catch (e) {
       UI.toast('Errore upload: ' + e.message, 'danger');
     } finally {
