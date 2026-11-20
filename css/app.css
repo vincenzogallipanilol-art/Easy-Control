@@ -836,3 +836,7 @@ html[data-bs-theme="dark"] .ec-chart-empty, html[data-bs-theme="dark"] .ec-empty
 .ec-log-entry li { margin: .25rem 0; line-height: 1.45; }
 .ec-log-foot { padding: .75rem 1.25rem; border-top: 1px solid #eef1f5; text-align: right; }
 html[data-bs-theme="dark"] .ec-log-entry + .ec-log-entry, html[data-bs-theme="dark"] .ec-log-foot { border-color: var(--ec-ln); }
+
+/* Box utente in dashboard: quattro numeri */
+.ec-user-box .ec-box-nums { gap: .6rem 1.1rem; flex-wrap: wrap; }
+.ec-user-box .ec-box-nums strong { font-size: 1.3rem; }

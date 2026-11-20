@@ -960,12 +960,15 @@
   }
 
   function colleagueBoxesHtml() {
-    const byColleague = {}; // colleague_id -> { total, byTipologia }
+    const byColleague = {}; // colleague_id -> { total, inPlan, todo, byTipologia }
     for (const p of practices) {
       const a = assignments[p.id];
       if (!a) continue;
-      const b = byColleague[a.colleague_id] || (byColleague[a.colleague_id] = { total: 0, byTipologia: {} });
+      const b = byColleague[a.colleague_id] || (byColleague[a.colleague_id] = { total: 0, inPlan: 0, todo: 0, byTipologia: {} });
       b.total++;
+      // come nel piano di lavoro: restano fuori le pratiche gia' nei pool o chiuse
+      const ph = workState(p.pratica_id).phase;
+      if (ph === 'none' || ph === 'today') { b.inPlan++; if (!effStatus(p.pratica_id || '')) b.todo++; }
       const tip = p.tipologia || 'Altro';
       b.byTipologia[tip] = (b.byTipologia[tip] || 0) + 1;
     }
@@ -978,7 +981,7 @@
     return `
       <div class="row g-3">
         ${active.map(c => {
-          const s = byColleague[c.id] || { total: 0, byTipologia: {} };
+          const s = byColleague[c.id] || { total: 0, inPlan: 0, todo: 0, byTipologia: {} };
           const tipRows = Object.entries(s.byTipologia).sort((a, b) => b[1] - a[1]);
           const color = UI.colleagueColor(c.color_idx);
           return `
@@ -992,7 +995,9 @@
                   <span class="ms-auto text-muted small text-nowrap">Apri piano →</span>
                 </div>
                 <div class="ec-box-nums">
-                  <div><strong>${fmt(s.total)}</strong><span>Assegnate</span></div>
+                  <div title="Tutte le pratiche assegnate, comprese quelle già chiuse o inviate ai pool"><strong>${fmt(s.total)}</strong><span>Assegnate</span></div>
+                  <div title="Le pratiche presenti nel piano di lavoro"><strong>${fmt(s.inPlan)}</strong><span>Nel piano</span></div>
+                  <div title="Nel piano e senza ancora uno stato"><strong>${fmt(s.todo)}</strong><span>Da lavorare</span></div>
                   <div><strong>${fmt(checkedToday[c.id] || 0)}</strong><span>Controllate ${per.text}</span></div>
                 </div>
                 ${tipRows.length ? `
@@ -1175,7 +1180,7 @@
 
   function planHtml(colleagueId) {
     const { rows, calls } = planData(colleagueId);
-    const f = planFilter[colleagueId] || (planFilter[colleagueId] = { q: '', st: '' });
+    const f = planFilter[colleagueId] || (planFilter[colleagueId] = { q: '', st: 'todo' });
     const cid = esc(colleagueId);
     planView[colleagueId] = { rows, filtered: rows, limit: (planView[colleagueId] || {}).limit || PLAN_PAGE };
     ColFilter.register('plan:' + colleagueId, {
@@ -1232,7 +1237,7 @@
     const box = card.querySelector('[data-plan-chips]');
     const v = planView[card.dataset.plan];
     if (!box || !v) return;
-    const f = planFilter[card.dataset.plan] || { q: '', st: '' };
+    const f = planFilter[card.dataset.plan] || { q: '', st: 'todo' };
     const counts = { todo: 0 };
     for (const p of v.rows) { const s = effStatus(p.pratica_id || '') || 'todo'; counts[s] = (counts[s] || 0) + 1; }
 
@@ -1339,11 +1344,13 @@
 
   function filterPlanRows(colleagueId) {
     const v = planView[colleagueId];
-    const f = planFilter[colleagueId] || { q: '', st: '' };
+    const f = planFilter[colleagueId] || { q: '', st: 'todo' };
     const q = f.q.toLowerCase().trim();
+    // con la ricerca o i filtri colonna attivi "Da lavorare" non nasconde le pratiche gia' lavorate (altrimenti non si trovano)
+    const wide = f.st === 'todo' && (q || ColFilter.active('plan:' + colleagueId));
     v.filtered = ColFilter.apply('plan:' + colleagueId, v.rows.filter(p => {
       const pid = p.pratica_id || '';
-      if (f.st) {
+      if (f.st && !wide) {
         const st = effStatus(pid);
         if (f.st === 'todo' ? st : st !== f.st) return false;
       }
@@ -1443,7 +1450,7 @@
   function planSearch(input) {
     const card = input.closest('[data-plan]');
     if (!card) return;
-    (planFilter[card.dataset.plan] || (planFilter[card.dataset.plan] = { q: '', st: '' })).q = input.value;
+    (planFilter[card.dataset.plan] || (planFilter[card.dataset.plan] = { q: '', st: 'todo' })).q = input.value;
     planFilterSoon(card);
   }
   const planFilterSoon = debounce(card => {
@@ -1478,7 +1485,7 @@
       }
       return;
     }
-    const f = planFilter[card.dataset.plan] || (planFilter[card.dataset.plan] = { q: '', st: '' });
+    const f = planFilter[card.dataset.plan] || (planFilter[card.dataset.plan] = { q: '', st: 'todo' });
     f.st = f.st === key ? '' : key;
     const v = planView[card.dataset.plan];
     if (v) v.limit = PLAN_PAGE;
