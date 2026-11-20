@@ -69,3 +69,6 @@ $$;
 
 GRANT EXECUTE ON FUNCTION public.pool_candidates(UUID, TEXT[], TEXT[], INT, INT) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.claim_practices(TEXT, UUID, UUID[])             TO authenticated;
+
+-- Ricarica la cache dello schema di PostgREST (altrimenti le funzioni nuove non sono subito visibili)
+NOTIFY pgrst, 'reload schema';
