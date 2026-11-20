@@ -813,7 +813,7 @@
     } else {
       const { rows, calls } = planData(myColleagueId);
       const todo = rows.filter(p => !effStatus(p.pratica_id || '')).length;
-      const checked = stats.reduce((n, r) => n + Number(r[per.field] || 0), 0);
+      const checked = statsSum(per.field, ownerKey)[myColleagueId] || 0;
       kpis = `
         <div class="ec-kpis mb-4">
           ${UI.kpiTile('Nel mio piano',   fmt(rows.length), iconDoc(),   'blue',   '', "App.goMine()")}
