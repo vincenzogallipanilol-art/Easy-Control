@@ -35,6 +35,7 @@ const Admin = (() => {
     renderUsers();
     await renderWorkingDays();
     renderVerifica();
+    sallyRegLoad();
   }
 
   // ── COLLEGHI ─────────────────────────────── */
@@ -663,6 +664,90 @@ const Admin = (() => {
     UI.toast(`${n} agenti aggiunti (salva il collega per confermare)`, 'success');
   }
 
+
+  // ── REGISTRO SALLY: pratiche gia' controllate (escluse dai nuovi report) ──── */
+  let _sallyReg = [];
+  const fmtDay = iso => iso ? new Date(iso).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
+
+  async function sallyRegLoad() {
+    const tb = document.getElementById('sally-reg-tbody');
+    if (!tb) return;
+    try {
+      _sallyReg = (await DB.getSallyChecked()).sort((a, b) => String(b.checked_at).localeCompare(String(a.checked_at)));
+      sallyRegRender();
+    } catch (e) {
+      tb.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-3">${DB.isMissingSchema(e)
+        ? 'Da attivare: esegui la migration 20261121000000_sally_checked.sql nel SQL Editor di Supabase.' : UI.esc('Errore: ' + e.message)}</td></tr>`;
+    }
+  }
+
+  function sallyRegRender() {
+    const tb = document.getElementById('sally-reg-tbody');
+    if (!tb) return;
+    const q = lcn(document.getElementById('sally-reg-q')?.value);
+    const list = q ? _sallyReg.filter(r => [r.pratica_id, r.agente, r.checked_by_name].some(v => lcn(v).includes(q))) : _sallyReg;
+    const cnt = document.getElementById('sally-reg-count');
+    if (cnt) cnt.textContent = _sallyReg.length;
+    const MAX = 300;
+    tb.innerHTML = list.slice(0, MAX).map(r => `
+      <tr>
+        <td class="font-monospace">${UI.esc(r.pratica_id)}</td>
+        <td>${UI.esc(r.agente) || '—'}</td>
+        <td>${r.status ? UI.workBadge(r.status) : '—'}</td>
+        <td>${fmtDay(r.checked_at)}</td>
+        <td>${UI.esc(r.checked_by_name) || '—'}</td>
+        <td class="text-muted small">${r.source === 'manual' ? 'Manuale' : 'Controllo'}</td>
+        <td class="text-end"><a href="#" class="text-danger" title="Togli dal registro" onclick="Admin.sallyRegRemove('${UI.esc(r.pratica_id)}');return false;">×</a></td>
+      </tr>`).join('') || '<tr><td colspan="7" class="text-center text-muted py-3">Nessuna pratica nel registro</td></tr>';
+    const foot = document.getElementById('sally-reg-foot');
+    if (foot) foot.textContent = list.length > MAX ? `Mostrate ${MAX} di ${list.length}: usa la ricerca per restringere.` : '';
+  }
+
+  async function sallyRegSync() {
+    try {
+      const ded = Engine.dedicatedFromConfig(_config, _agentExclusions);
+      const ag = [], co = [];
+      for (const [cid, d] of Object.entries(ded)) for (const a of d.agents || []) { ag.push(lcn(a)); co.push(cid); }
+      if (!ag.length) { UI.toast('Nessun agente Sally configurato nei colleghi', 'warning'); return; }
+      const n = await DB.sallySync(ag, co);
+      await sallyRegLoad();
+      UI.toast(n ? `${n} pratiche aggiunte o aggiornate nel registro` : 'Registro già aggiornato', 'success');
+    } catch (e) {
+      UI.toast(DB.isMissingSchema(e) ? 'Esegui prima la migration 20261121000000_sally_checked.sql in Supabase' : 'Errore: ' + e.message, 'danger');
+    }
+  }
+
+  async function sallyRegAdd() {
+    const ids = [...new Set((document.getElementById('sally-reg-ids')?.value || '').split(/[\s,;]+/).map(x => x.trim()).filter(Boolean))];
+    if (!ids.length) { UI.toast('Incolla almeno un ID pratica', 'warning'); return; }
+    const agente = (document.getElementById('sally-reg-agent')?.value || '').trim();
+    const have = new Set(_sallyReg.map(r => r.pratica_id));
+    const rows = ids.filter(id => !have.has(id)).map(id => ({
+      pratica_id: id, agente, status: '', checked_at: new Date().toISOString(),
+      checked_by: Auth.getProfile()?.id || null, checked_by_name: 'Aggiunta manuale', source: 'manual',
+    }));
+    if (!rows.length) { UI.toast('Gli ID sono già nel registro', 'info'); return; }
+    try {
+      await DB.addSallyChecked(rows);
+      document.getElementById('sally-reg-ids').value = '';
+      await sallyRegLoad();
+      UI.toast(`${rows.length} pratiche aggiunte al registro`, 'success');
+    } catch (e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  async function sallyRegRemove(id) {
+    if (!UI.confirm(`Togliere la pratica ${id} dal registro? Potrà rientrare nei prossimi report.`)) return;
+    try {
+      await DB.deleteSallyChecked([id]);
+      _sallyReg = _sallyReg.filter(r => r.pratica_id !== id);
+      sallyRegRender();
+    } catch (e) {
+      UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
   return {
     init,
     openColleagueModal, saveColleague, deleteColleague,
@@ -673,5 +758,6 @@ const Admin = (() => {
     setUserRole, setUserColleague, approveUser, rejectUser,
     impersonate: id => Auth.impersonate(id),
     sallyAnalyze, sallyApply, sallyCancel,
+    sallyRegSync, sallyRegAdd, sallyRegRemove, sallyRegRender,
   };
 })();
