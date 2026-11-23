@@ -840,3 +840,27 @@ html[data-bs-theme="dark"] .ec-log-entry + .ec-log-entry, html[data-bs-theme="da
 /* Box utente in dashboard: quattro numeri */
 .ec-user-box .ec-box-nums { gap: .6rem 1.1rem; flex-wrap: wrap; }
 .ec-user-box .ec-box-nums strong { font-size: 1.3rem; }
+
+/* ── Pratica in controllo (contorno rosso pulsante dopo il click sull'ID) ── */
+@keyframes ec-focus-pulse {
+  0%, 100% { box-shadow: inset 0 3px 0 rgba(214, 57, 57, .95), inset 0 -3px 0 rgba(214, 57, 57, .95); background-color: rgba(214, 57, 57, .06); }
+  50%      { box-shadow: inset 0 3px 0 rgba(214, 57, 57, .25), inset 0 -3px 0 rgba(214, 57, 57, .25); background-color: rgba(214, 57, 57, .14); }
+}
+tr.ec-focus > td { animation: ec-focus-pulse 1.4s ease-in-out infinite; }
+tr.ec-focus > td:first-child { box-shadow: inset 4px 0 0 #d63939, inset 0 3px 0 rgba(214, 57, 57, .95), inset 0 -3px 0 rgba(214, 57, 57, .95); }
+tr.ec-focus .ec-pratica-btn { box-shadow: 0 0 0 3px rgba(214, 57, 57, .45); background: #d63939; }
+.ec-focus-tag {
+  display: inline-flex; align-items: center; gap: 5px; margin-left: 8px; padding: 2px 4px 2px 8px; border-radius: 999px;
+  font-size: .72rem; font-weight: 600; color: #fff; background: #d63939; white-space: nowrap; vertical-align: middle;
+}
+.ec-focus-dot { width: 7px; height: 7px; border-radius: 50%; background: #fff; animation: ec-focus-dot 1.4s ease-in-out infinite; }
+@keyframes ec-focus-dot { 0%, 100% { opacity: 1; } 50% { opacity: .25; } }
+.ec-focus-x {
+  border: 0; background: rgba(255, 255, 255, .25); color: #fff; width: 18px; height: 18px; border-radius: 50%;
+  line-height: 1; font-size: 14px; padding: 0; cursor: pointer;
+}
+.ec-focus-x:hover { background: rgba(255, 255, 255, .5); }
+@media (prefers-reduced-motion: reduce) {
+  tr.ec-focus > td { animation: none; box-shadow: inset 0 3px 0 #d63939, inset 0 -3px 0 #d63939; background-color: rgba(214, 57, 57, .1); }
+  .ec-focus-dot { animation: none; }
+}
