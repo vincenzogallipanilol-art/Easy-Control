@@ -1536,6 +1536,7 @@
     }
     delete pending[pid];
     await saveWork(pid, colleagueId, status, note);
+    if (typeof Focus !== 'undefined') Focus.done(pid, status);
   }
 
   async function saveNote(input) {
@@ -1555,6 +1556,7 @@
     if (!(pid in pending) && note === (saved?.note || '')) return; // niente da salvare
     delete pending[pid];
     await saveWork(pid, colleagueId, status, note);
+    if (typeof Focus !== 'undefined') Focus.done(pid, status);
   }
 
   function detectMentions(note, prevNote) {
