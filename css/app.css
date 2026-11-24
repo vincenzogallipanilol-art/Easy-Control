@@ -877,3 +877,11 @@ tr.ec-focus .ec-pratica-btn { box-shadow: 0 0 0 3px rgba(214, 57, 57, .45); back
 .ec-called-badge:hover { background: #26973a; }
 .ec-call-btn:disabled, .ec-called-badge:disabled { opacity: .6; cursor: default; }
 .ec-outcome-select { width: 170px; font-size: .8125rem; padding-top: .2rem; padding-bottom: .2rem; min-height: 0; }
+
+/* ── Pool "Da assegnare": pratica gia' controllata ── */
+.ec-checked-badge {
+  display: inline-flex; align-items: baseline; gap: 5px; white-space: nowrap; font-size: .78rem; font-weight: 600;
+  padding: .15rem .55rem; border-radius: 999px; color: #0b7285; background: rgba(12, 168, 199, .14);
+}
+.ec-checked-badge small { font-weight: 500; opacity: .9; font-size: .7rem; }
+html[data-bs-theme="dark"] .ec-checked-badge { color: #6fd6ea; background: rgba(12, 168, 199, .2); }
