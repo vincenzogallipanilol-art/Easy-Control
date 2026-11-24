@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.29.1', date: '2026-11-24', items: [
+    'Pool "Da chiamare": le pratiche, anche già chiamate, restano nel pool fino a quando non viene dato l\'esito Conforme o Richiesta integrazioni. Non tornano più nel piano alle 19.',
+  ] },
   { v: '1.29.0', date: '2026-11-24', items: [
     'Pool "Da chiamare": il pulsante "Segna chiamato" diventa un badge verde "Chiamato" con data e ora, e la riga si colora di verde (clicca il badge per annullare).',
     'Nuova colonna "Esito": quando il cliente ha integrato scegli Conforme o Richiesta integrazioni direttamente dal pool; la pratica esce dal pool e torna nel piano con lo stato scelto.',
