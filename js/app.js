@@ -1873,11 +1873,64 @@
     nominativo: r => `${r.cognome} ${r.nome}`.trim(),
     tipologia: r => r.tipologia, stato: r => r.stato, agente: r => r.agente,
     motivo: r => REASON_LABELS[r.reason] || '',
+    controllata: r => poolChecked[r.pid] ? 'Già controllata' : (poolChecksFetched.has(r.pid) ? 'Non controllata' : '…'),
     istituto: r => (r.w && r.w.istituto_finanziario) || '',
     operatore: r => r.w ? (userName(r.w.set_by) || colName(r.w.colleague_id) || '') : '',
     segnalata: r => r.w ? new Date(r.w.set_at).toLocaleDateString('it-IT') : '',
   };
   const POOL_CF_SORT = { segnalata: r => r.w ? r.w.set_at : '' };
+
+  // Pratiche del pool "Da assegnare" gia' controllate in passato (Conforme / Richiesta integrazioni), dal log dei controlli
+  const poolChecked = {}, poolChecksFetched = new Set();
+  let poolChecksBusy = false;
+  async function ensurePoolChecks(pids) {
+    const need = [...new Set(pids)].filter(p => p && !poolChecksFetched.has(p));
+    if (!need.length) return false;
+    const got = await DB.getLastChecks(need);
+    for (const p of need) poolChecksFetched.add(p);
+    Object.assign(poolChecked, got);
+    return true;
+  }
+  function loadPoolChecks(items) {
+    if (poolChecksBusy || !canSeeAll || typeof DB.getLastChecks !== 'function') return;
+    const pids = items.map(r => r.pid);
+    if (!pids.some(p => p && !poolChecksFetched.has(p))) return;
+    poolChecksBusy = true;
+    ensurePoolChecks(pids)
+      .then(changed => { if (changed && currentTarget === 'pool' && poolTab === 'assign') withFocus(renderPool); })
+      .catch(() => { /* il log non e' leggibile: nessun avviso */ })
+      .finally(() => { poolChecksBusy = false; });
+  }
+  const checkWhen = c => String(c.check_day || '').split('-').reverse().join('/');
+  const checkWho = c => userName(c.user_id) || colName(c.colleague_id) || '';
+  const checkedText = c => `${checkWhen(c)} · ${(UI.WORK_STATUSES[c.status] || {}).label || c.status}${checkWho(c) ? ' · ' + checkWho(c) : ''}`;
+  const checkedCell = pid => {
+    const c = poolChecked[pid];
+    if (c) return `<td><span class="ec-checked-badge" title="Già controllata: ${esc(checkedText(c))}">&#10003; ${esc(checkWhen(c))}<small>${esc((UI.WORK_STATUSES[c.status] || {}).short || '')}${checkWho(c) ? ' · ' + esc(checkWho(c)) : ''}</small></span></td>`;
+    return `<td class="text-muted small">${poolChecksFetched.has(pid) ? '—' : '…'}</td>`;
+  };
+  // Finestra con piu' scelte: ritorna il valore del pulsante premuto (null = annulla)
+  function askChoice(title, message, buttons) {
+    return new Promise(resolve => {
+      const wrap = document.createElement('div');
+      wrap.className = 'ec-modal'; wrap.setAttribute('role', 'dialog'); wrap.setAttribute('aria-modal', 'true');
+      wrap.innerHTML = `
+        <div class="ec-modal-box ec-log-box">
+          <div class="ec-modal-head"><h3 class="m-0 fs-3">${esc(title)}</h3></div>
+          <div class="ec-log-body"><p class="mb-0">${message}</p></div>
+          <div class="ec-log-foot d-flex flex-wrap gap-2 justify-content-end">
+            <button type="button" class="btn" data-v="">Annulla</button>
+            ${buttons.map(b => `<button type="button" class="btn ${b.cls || 'btn-primary'}" data-v="${esc(b.value)}">${esc(b.label)}</button>`).join('')}
+          </div>
+        </div>`;
+      const end = v => { document.removeEventListener('keydown', onKey, true); wrap.remove(); resolve(v || null); };
+      const onKey = e => { if (e.key === 'Escape') { e.stopPropagation(); end(null); } };
+      wrap.addEventListener('click', e => { const b = e.target.closest('[data-v]'); if (b) end(b.dataset.v); else if (e.target === wrap) end(null); });
+      document.addEventListener('keydown', onKey, true);
+      document.body.appendChild(wrap);
+      const first = wrap.querySelector('.btn-primary'); if (first) first.focus();
+    });
+  }
   const pth = (col, label) => ColFilter.th('pool:' + poolTab, col, label);
 
   function poolFiltered(items) {
@@ -1921,6 +1974,7 @@
       </button>`).join('');
 
     const items = poolItems(poolTab);
+    if (poolTab === 'assign') loadPoolChecks(items);
     ColFilter.register('pool:' + poolTab, {
       all: () => items, cols: POOL_CF, sortKeys: POOL_CF_SORT,
       onChange: () => { _poolShowAll = false; withFocus(renderPool); },
@@ -1976,6 +2030,7 @@
         <td class="text-muted small">${esc(r.tipologia) || '—'}</td>
         <td>${UI.statoBadge(esc(r.stato))}</td>
         <td class="text-muted small">${REASON_LABELS[r.reason] || '—'}</td>
+        ${checkedCell(r.pid)}
         ${showAssign ? '' : `<td class="text-muted small">${esc(r.agente) || '—'}</td>`}
         <td>
           <select class="form-select form-select-sm" style="width:auto" data-practice="${r.p.id}"
@@ -2001,7 +2056,7 @@
       ${regular.length ? `
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr>${chkAll}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}<th>Assegna a</th></tr></thead>
+            <thead><tr>${chkAll}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('controllata', 'Controllata')}<th>Assegna a</th></tr></thead>
             <tbody>${shown(regular).map(r => poolRow(r, true)).join('')}</tbody>
           </table>
         </div>
@@ -2013,7 +2068,7 @@
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr>${regular.length ? '<th class="w-1"></th>' : chkAll}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('agente', 'Agente attuale')}<th>Assegna a</th></tr></thead>
+            <thead><tr>${regular.length ? '<th class="w-1"></th>' : chkAll}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('controllata', 'Controllata')}${pth('agente', 'Agente attuale')}<th>Assegna a</th></tr></thead>
             <tbody>${shown(sally).map(r => poolRow(r, false)).join('')}</tbody>
           </table>
         </div>
@@ -2091,7 +2146,23 @@
   async function poolBulkAssign() {
     const to = $('pool-bulk-to')?.value;
     if (!to) { UI.toast('Scegli il collega a cui assegnare', 'warning'); return; }
-    const ids = [...poolSel].filter(id => practiceById[id]);
+    let ids = [...poolSel].filter(id => practiceById[id]);
+    if (!ids.length) return;
+    try { await ensurePoolChecks(ids.map(id => practiceById[id].pratica_id)); } catch (_) { /* log non leggibile */ }
+    const done = ids.filter(id => poolChecked[practiceById[id].pratica_id]);
+    if (done.length) {
+      const free = ids.length - done.length;
+      const doneSet = new Set(done);
+      const msg = free
+        ? `Ne hai selezionate <strong>${fmt(ids.length)}</strong>, ma solo <strong>${fmt(free)}</strong> non sono ancora state controllate (<strong>${fmt(done.length)}</strong> già controllate in passato).<br>Vuoi assegnare a ${esc(colName(to))} solo le ${fmt(free)} non controllate?`
+        : `Le <strong>${fmt(ids.length)}</strong> pratiche selezionate sono tutte già state controllate in passato. Vuoi assegnarle comunque a ${esc(colName(to))}?`;
+      const buttons = free
+        ? [{ value: 'free', label: `Solo le ${fmt(free)} non controllate` }, { value: 'all', label: `Tutte le ${fmt(ids.length)}`, cls: 'btn-outline-primary' }]
+        : [{ value: 'all', label: 'Assegna comunque' }];
+      const choice = await askChoice('Pratiche già controllate', msg, buttons);
+      if (!choice) return;
+      if (choice === 'free') ids = ids.filter(id => !doneSet.has(id));
+    }
     if (!ids.length) return;
     try {
       const { data: { user } } = await db.auth.getUser();
@@ -2129,6 +2200,9 @@
 
   async function assignFromPool(practiceId, colleagueId) {
     if (!colleagueId) return;
+    const pid = practiceById[practiceId]?.pratica_id;
+    const c = pid && poolChecked[pid];
+    if (c && !UI.confirm(`La pratica ${pid} è già stata controllata (${checkedText(c)}). Assegnarla comunque?`)) { fullRenderSoon(); return; }
     try {
       const { data: { user } } = await db.auth.getUser();
       const row = {
