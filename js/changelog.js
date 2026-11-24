@@ -1,5 +1,9 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.30.0', date: '2026-11-24', items: [
+    'Pool "Da assegnare": nuova colonna "Controllata" che mostra le pratiche già controllate in passato (data, stato e chi le ha controllate). Si può filtrare e ordinare come le altre colonne.',
+    'Assegnando pratiche selezionate (anche in blocco), se alcune sono già state controllate compare un avviso: "ne hai selezionate 100, solo 65 non sono state controllate" e scegli se assegnare solo quelle non controllate, tutte oppure annullare.',
+  ] },
   { v: '1.29.1', date: '2026-11-24', items: [
     'Pool "Da chiamare": le pratiche, anche già chiamate, restano nel pool fino a quando non viene dato l\'esito Conforme o Richiesta integrazioni. Non tornano più nel piano alle 19.',
   ] },
