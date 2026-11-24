@@ -155,9 +155,8 @@
     if (!w || w.closed_at) return { w: null, phase: 'none' };
     if (!w.status) return { w, phase: 'none' };
     if (w.status === 'da_chiamare') {
-      // le chiamate fatte vengono ripulite alla chiusura successiva
-      const calledSwept = w.called && w.called_at && new Date(w.called_at).getTime() < cutoff;
-      return calledSwept ? { w: null, phase: 'none' } : { w, phase: 'call' };
+      // resta nel pool finche' non gli viene dato un esito (Conforme / Richiesta integrazioni): mai ripulita alle 19
+      return { w, phase: 'call' };
     }
     if (UI.MGMT_STATUSES.includes(w.status)) return { w, phase: 'mgmt' };
     if (new Date(w.set_at).getTime() >= cutoff) return { w, phase: 'today' };
