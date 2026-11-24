@@ -1158,6 +1158,17 @@
       </tr>`;
   }
 
+  // Pool "Da chiamare": pulsante Chiamato (con orario) ed esito diretto
+  const callTime = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); };
+  const calledCell = (w, dis) => w.called
+    ? `<button type="button" class="ec-called-badge" data-fkey="called:${esc(w.pratica_id)}" onclick="App.setCalled(this)" ${dis} title="Chiamata fatta: clicca per annullare">&#10003; Chiamato<small>${esc(callTime(w.called_at))}</small></button>`
+    : `<button type="button" class="ec-call-btn" data-fkey="called:${esc(w.pratica_id)}" onclick="App.setCalled(this)" ${dis} title="Segna che hai chiamato">Segna chiamato</button>`;
+  const outcomeCell = (w, dis) => `
+    <select class="form-select form-select-sm ec-outcome-select" data-fkey="out:${esc(w.pratica_id)}" aria-label="Esito pratica ${esc(w.pratica_id)}"
+      onchange="App.setCallOutcome(this)" ${dis} title="Quando il cliente ha integrato: dai l'esito e la pratica esce dal pool">
+      <option value="">Esito…</option><option value="conforme">Conforme</option><option value="integrazioni">Richiesta integrazioni</option>
+    </select>`;
+
   function callPoolHtml(calls, colleagueId) {
     if (!calls.length) return '';
     const ro = colleagueId && !canEditColleague(colleagueId) ? 'disabled' : '';
@@ -1170,7 +1181,7 @@
           <table class="ec-grid ec-grid--pool">
             <thead><tr>
               <th>Pratica ID</th><th>Cognome</th><th>Note</th><th>Tipologia</th><th>Istituto Finanziario</th>
-              <th>Agente Attuale</th><th>Chiamato</th><th>Note Chiamata</th>
+              <th>Agente Attuale</th><th>Chiamato</th><th>Note Chiamata</th><th>Esito</th>
             </tr></thead>
             <tbody>
               ${calls.map(w => `
@@ -1179,18 +1190,13 @@
                   ${cell(w.cognome)}
                   <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
                   ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
-                  <td>
-                    <select class="form-select form-select-sm ec-called-select" data-fkey="called:${esc(w.pratica_id)}"
-                      aria-label="Chiamato" onchange="App.setCalled(this)" ${ro}>
-                      <option value="0" ${w.called ? '' : 'selected'}>No</option>
-                      <option value="1" ${w.called ? 'selected' : ''}>Sì</option>
-                    </select>
-                  </td>
+                  <td>${calledCell(w, ro)}</td>
                   <td class="ec-col-note">
                     <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
                       value="${esc(w.pool_note || '')}" placeholder="Esito della chiamata…" maxlength="1000" autocomplete="off"
                       aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()" ${ro}/>
                   </td>
+                  <td>${outcomeCell(w, ro)}</td>
                 </tr>`).join('')}
             </tbody>
           </table>
@@ -1614,11 +1620,45 @@
       softRender();
     }
   }
-  async function setCalled(sel) {
+  async function setCalled(btn) {
+    const pid = btn.closest('tr').dataset.pid;
+    const called = !work[pid]?.called;
+    btn.disabled = true;
+    await updatePoolRow(pid, { called, called_at: called ? new Date().toISOString() : null });
+    softRender();
+  }
+  // Esito diretto dal pool "Da chiamare": il cliente ha integrato -> Conforme / Richiesta integrazioni
+  async function setCallOutcome(sel) {
     const tr = sel.closest('tr');
-    const called = sel.value === '1';
-    tr.classList.toggle('is-called', called);
-    await updatePoolRow(tr.dataset.pid, { called, called_at: called ? new Date().toISOString() : null });
+    const pid = tr.dataset.pid;
+    const status = sel.value;
+    const w = work[pid];
+    if (!status || !w) return;
+    const noteEl = tr.querySelector('[data-fkey^="pnote:"]');
+    const note = ((noteEl && noteEl.value) || w.pool_note || '').trim();
+    if (status !== 'conforme' && !note) {
+      sel.value = '';
+      UI.toast('Scrivi l\'esito nelle Note chiamata: per "Richiesta integrazioni" la nota è obbligatoria', 'warning');
+      if (noteEl) noteEl.focus();
+      return;
+    }
+    if (!UI.confirm(`Segnare la pratica ${pid} come "${UI.WORK_STATUSES[status].label}"? Uscirà dal pool Da chiamare.`)) { sel.value = ''; return; }
+    try {
+      const row = await DB.setPracticeWork({
+        praticaId: pid, status, note,
+        reportId: activeReport?.id || null,
+        colleagueId: w.colleague_id || null,
+        practice: practiceByPid[pid] || w,
+      });
+      if (row) work[pid] = row;
+      if (typeof Focus !== 'undefined') Focus.done(pid, status);
+      refreshStatsSoon();
+      fullRender();
+      UI.toast(`Pratica ${pid}: ${UI.WORK_STATUSES[status].label}`, 'success');
+    } catch (e) {
+      sel.value = '';
+      UI.toast(DB.isMissingSchema(e) ? SCHEMA_MSG : 'Errore: ' + e.message, 'danger');
+    }
   }
   async function setPoolNote(input) {
     const pid = input.closest('tr').dataset.pid;
@@ -1992,7 +2032,7 @@
           <thead><tr>
             ${pth('pid', 'Pratica')}${pth('cognome', 'Cognome')}${pth('nome', 'Nome')}<th>Note</th>${pth('tipologia', 'Tipologia')}${pth('istituto', 'Istituto Finanziario')}
             ${pth('agente', 'Agente Attuale')}${pth('stato', 'Stato Attuale')}${pth('operatore', calls ? 'Operatore' : 'Inviata da')}${pth('segnalata', 'Segnalata')}
-            ${calls ? '<th>Chiamato</th><th>Note chiamata</th>' : '<th>Note gestione</th><th></th>'}
+            ${calls ? '<th>Chiamato</th><th>Note chiamata</th><th>Esito</th>' : '<th>Note gestione</th><th></th>'}
           </tr></thead>
           <tbody>
             ${shown.map(({ w, stato }) => `
@@ -2005,18 +2045,13 @@
                 ${senderCell(w)}
                 <td>${new Date(w.set_at).toLocaleDateString('it-IT')}</td>
                 ${calls ? `
-                <td>
-                  <select class="form-select form-select-sm ec-called-select" data-fkey="called:${esc(w.pratica_id)}"
-                    aria-label="Chiamato" onchange="App.setCalled(this)">
-                    <option value="0" ${w.called ? '' : 'selected'}>No</option>
-                    <option value="1" ${w.called ? 'selected' : ''}>Sì</option>
-                  </select>
-                </td>
+                <td>${calledCell(w, '')}</td>
                 <td class="ec-col-note">
                   <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
                     value="${esc(w.pool_note || '')}" placeholder="Esito della chiamata…" maxlength="1000" autocomplete="off"
                     aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
-                </td>` : `
+                </td>
+                <td>${outcomeCell(w, '')}</td>` : `
                 <td class="ec-col-note">
                   <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
                     value="${esc(w.pool_note || '')}" placeholder="Esito / azioni…" maxlength="1000" autocomplete="off"
@@ -2382,7 +2417,7 @@
   window.App = window.AppRuntime = {
     getPractices: () => practices,
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
-    setCalled, setPoolNote, closePoolRow, openIntegra, refillPlan,
+    setCalled, setCallOutcome, setPoolNote, closePoolRow, openIntegra, refillPlan,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, filterPool, showAllPool, poolSet, poolReset,
     sendChat, chatOpen, openNotification,
