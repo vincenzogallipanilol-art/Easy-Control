@@ -314,7 +314,7 @@ const DB = (() => {
     const parts = [
       'status.is.null',
       'status.in.(audit,help,xflat)',
-      `and(status.eq.da_chiamare,or(called.is.false,called_at.gte.${sinceIso}))`,
+      'status.eq.da_chiamare',
       `set_at.gte.${sinceIso}`,
     ];
     if (reportId) parts.push(`report_id.eq.${reportId}`);
