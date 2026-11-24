@@ -204,6 +204,27 @@ const DB = (() => {
     if (error) throw error;
     return data;
   }
+  // Ultimo controllo "chiuso" (Conforme / Richiesta integrazioni) di ciascuna pratica, dal log practice_checks
+  async function getLastChecks(pids) {
+    const out = {};
+    const chunks = [];
+    for (let i = 0; i < pids.length; i += 100) chunks.push(pids.slice(i, i + 100));
+    let next = 0;
+    const worker = async () => {
+      while (next < chunks.length) {
+        const c = chunks[next++];
+        const { data, error } = await db.from('practice_checks')
+          .select('pratica_id,check_day,status,user_id,colleague_id')
+          .in('pratica_id', c).in('status', ['conforme', 'integrazioni'])
+          .order('check_day', { ascending: false }).limit(1000);
+        if (error) throw error;
+        for (const r of data) if (!out[r.pratica_id]) out[r.pratica_id] = r;
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(5, chunks.length) }, worker));
+    return out;
+  }
+
   // Registro pratiche gia' controllate su Sally (solo Admin)
   async function sallySync(agents, colleagues) {
     const { data, error } = await db.rpc('sally_sync', { p_agents: agents, p_colleagues: colleagues });
@@ -434,7 +455,7 @@ const DB = (() => {
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser,
     getAgentExclusions, addAgentExclusion, deleteAgentExclusion,
-    sallySync, getSallyChecked, addSallyChecked, deleteSallyChecked,
+    getLastChecks, sallySync, getSallyChecked, addSallyChecked, deleteSallyChecked,
     getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, getCheckSeries, notifyMentions,
     isMissingSchema,
     getNotifications, markNotificationRead, markAllNotificationsRead,
