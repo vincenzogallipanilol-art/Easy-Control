@@ -1,5 +1,9 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.29.0', date: '2026-11-24', items: [
+    'Pool "Da chiamare": il pulsante "Segna chiamato" diventa un badge verde "Chiamato" con data e ora, e la riga si colora di verde (clicca il badge per annullare).',
+    'Nuova colonna "Esito": quando il cliente ha integrato scegli Conforme o Richiesta integrazioni direttamente dal pool; la pratica esce dal pool e torna nel piano con lo stato scelto.',
+  ] },
   { v: '1.28.0', date: '2026-11-23', items: [
     'Cliccando l\'ID di una pratica (si apre su EGG) la riga resta evidenziata con un contorno rosso pulsante e il tag "In controllo": tornando su Easy Control vedi subito quale pratica stavi controllando. Si spegne quando le dai uno stato, clicchi la X sul tag o apri un\'altra pratica.',
   ] },
