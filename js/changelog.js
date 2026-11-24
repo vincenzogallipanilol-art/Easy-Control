@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.31.0', date: '2026-11-24', items: [
+    'Configurazione colleghi: gli stati presenti nel report ma non ancora in elenco vengono aggiunti in automatico, disattivati per tutti i colleghi. Ad ogni nuovo report i nuovi stati compaiono da soli e li attivi tu.',
+  ] },
   { v: '1.30.0', date: '2026-11-24', items: [
     'Pool "Da assegnare": nuova colonna "Controllata" che mostra le pratiche già controllate in passato (data, stato e chi le ha controllate). Si può filtrare e ordinare come le altre colonne.',
     'Assegnando pratiche selezionate (anche in blocco), se alcune sono già state controllate compare un avviso: "ne hai selezionate 100, solo 65 non sono state controllate" e scegli se assegnare solo quelle non controllate, tutte oppure annullare.',
