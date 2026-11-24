@@ -452,12 +452,34 @@
       mark('pagina visibile');
       subscribeRealtime();
       if (background) background().catch(e => console.warn('aggiornamento in background', e));
+      syncNewStates();
     } catch (e) {
       UI.toast('Errore caricamento: ' + e.message, 'danger');
     } finally {
       UI.hideLoader();
       if (/[?&]perf\b/.test(location.search)) console.table(_marks.map(([k, ms]) => ({ fase: k, ms })));
     }
+  }
+
+  // Stati presenti nel report ma non ancora nella configurazione colleghi: aggiunti come disattivati (solo admin)
+  async function syncNewStates() {
+    if (!isAdmin || !practices.length) return;
+    try {
+      const known = new Set((await DB.getStateFilters()).map(r => String(r.stato).trim().toLowerCase()));
+      const found = new Map();
+      for (const p of practices) {
+        const st = String(p.stato_attuale || '').trim();
+        const k = st.toLowerCase();
+        if (st && !known.has(k) && !found.has(k)) found.set(k, st);
+      }
+      if (!found.size) return;
+      const names = [...found.values()];
+      for (const stato of names) await DB.upsertStateFilter({ stato, included: false, note_mode: 'empty', conf_mode: 'empty' });
+      const rows = names.map(stato => ({ stato, included: false, note_mode: 'empty', conf_mode: 'empty' }));
+      for (const c of colleagues) await DB.saveColleagueStateFilters(c.id, rows);
+      colleagueStateFilters = await DB.getAllColleagueStateFilters();
+      UI.toast(`${names.length} nuovi stati aggiunti alla configurazione colleghi (disattivati)`, 'info');
+    } catch (e) { console.warn('sync stati', e); }
   }
 
   // 5b. Dati indipendenti dal report attivo
