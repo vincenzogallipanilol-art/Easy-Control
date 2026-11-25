@@ -891,3 +891,8 @@ html[data-bs-theme="dark"] .ec-checked-badge { color: #6fd6ea; background: rgba(
 .ec-grid tr.ec-sel td, .ec-grid tr.ec-sel:hover td { background: #e3edfb; }
 html[data-bs-theme="dark"] .ec-grid tr.ec-sel td, html[data-bs-theme="dark"] .ec-grid tr.ec-sel:hover td { background: #243659; }
 .ec-grid[data-colleague] th.ec-col-id, .ec-grid[data-colleague] td.ec-col-id { min-width: 172px; width: 172px; }
+
+/* Agenti con occhio di riguardo */
+.ec-watch-agent { color: #d63939; font-weight: 700; background: rgba(214, 57, 57, .12); border-radius: 6px; padding: .05rem .4rem; white-space: nowrap; }
+.ec-watch-tag { display: inline-block; margin-left: .35rem; color: #d63939; font-weight: 700; font-size: .72rem; background: rgba(214, 57, 57, .12); border-radius: 999px; padding: .05rem .5rem; white-space: nowrap; }
+html[data-bs-theme="dark"] .ec-watch-agent, html[data-bs-theme="dark"] .ec-watch-tag { color: #ff8a8a; background: rgba(214, 57, 57, .22); }
