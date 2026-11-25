@@ -192,6 +192,16 @@ const DB = (() => {
       if (error) throw error;
     });
   }
+  // Toglie le assegnazioni di piu' pratiche; ritorna gli id davvero rimossi (la RLS puo' escluderne alcune)
+  async function deleteAssignmentsByPractice(practiceIds) {
+    const done = [];
+    await inChunks(practiceIds, 200, 3, async part => {
+      const { data, error } = await db.from('assignments').delete().in('practice_id', part).select('practice_id');
+      if (error) throw error;
+      done.push(...(data || []).map(r => r.practice_id));
+    });
+    return done;
+  }
   async function deleteAutoAssignments(reportId) {
     const { error } = await db.from('assignments')
       .delete().eq('report_id', reportId).eq('is_manual', false);
@@ -450,7 +460,7 @@ const DB = (() => {
     getColleagues, upsertColleague, deleteColleague,
     getReports, getActiveReport, createReport,
     insertPractices, getPractices,
-    getAssignments, getPoolCandidates, claimPractices, upsertAssignment, bulkUpsertAssignments, deleteAutoAssignments,
+    getAssignments, getPoolCandidates, claimPractices, upsertAssignment, bulkUpsertAssignments, deleteAssignmentsByPractice, deleteAutoAssignments,
     getDistinctTipologie, getDistinctAgenti,
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser,
