@@ -36,6 +36,7 @@ const Admin = (() => {
     await renderWorkingDays();
     renderVerifica();
     sallyRegLoad();
+    watchLoad();
   }
 
   // ── COLLEGHI ─────────────────────────────── */
@@ -666,6 +667,63 @@ const Admin = (() => {
 
 
   // ── REGISTRO SALLY: pratiche gia' controllate (escluse dai nuovi report) ──── */
+  // ── AGENTI CON OCCHIO DI RIGUARDO ─────────────────── */
+  let _watch = [];
+  const lcw = x => String(x || '').toLowerCase().trim();
+  async function watchLoad() {
+    _watch = Array.isArray(_config.watched_agents) ? _config.watched_agents.map(w => ({ name: w.name, note: w.note || '', colleague_id: w.colleague_id || '' })) : [];
+    const dl = document.getElementById('watch-agents-dl');
+    if (dl && !dl.children.length) DB.getDistinctAgenti().then(l => { dl.innerHTML = l.map(x => `<option value="${UI.esc(x)}"></option>`).join(''); }).catch(() => {});
+    const sel = document.getElementById('watch-col');
+    if (sel) sel.innerHTML = '<option value="">Nessuna assegnazione</option>' + _colleagues.filter(c => c.active).map(c => `<option value="${UI.esc(c.id)}">${UI.esc(c.name)}</option>`).join('');
+    watchRender();
+  }
+  function watchRender() {
+    const tb = document.getElementById('watch-tbody'), cnt = document.getElementById('watch-count');
+    if (cnt) cnt.textContent = _watch.length;
+    if (!tb) return;
+    if (!_watch.length) { tb.innerHTML = '<tr><td colspan="4" class="text-center text-muted py-3">Nessun agente in elenco</td></tr>'; return; }
+    const opts = sel => '<option value="">Nessuna assegnazione</option>' + _colleagues.filter(c => c.active || c.id === sel)
+      .map(c => `<option value="${UI.esc(c.id)}" ${c.id === sel ? 'selected' : ''}>${UI.esc(c.name)}</option>`).join('');
+    tb.innerHTML = _watch.map((w, i) => `
+      <tr>
+        <td><strong class="text-danger">${UI.esc(w.name)}</strong></td>
+        <td><input type="text" class="form-control form-control-sm" value="${UI.esc(w.note)}" maxlength="300" placeholder="Nota" onchange="Admin.watchEdit(${i}, 'note', this.value)"/></td>
+        <td><select class="form-select form-select-sm" style="min-width:180px" onchange="Admin.watchEdit(${i}, 'colleague_id', this.value)">${opts(w.colleague_id)}</select></td>
+        <td><button type="button" class="btn btn-sm btn-outline-danger" onclick="Admin.watchRemove(${i})">Rimuovi</button></td>
+      </tr>`).join('');
+  }
+  async function watchSave() {
+    await DB.setConfig('watched_agents', _watch);
+    _config.watched_agents = _watch.map(w => ({ ...w }));
+  }
+  async function watchAdd() {
+    const name = document.getElementById('watch-name').value.trim();
+    if (!name) { UI.toast('Scrivi il nome dell\'agente', 'warning'); return; }
+    if (_watch.some(w => lcw(w.name) === lcw(name))) { UI.toast('Agente già in elenco', 'warning'); return; }
+    _watch.push({ name, note: document.getElementById('watch-note').value.trim(), colleague_id: document.getElementById('watch-col').value || '' });
+    try {
+      await watchSave();
+      ['watch-name', 'watch-note'].forEach(id => { document.getElementById(id).value = ''; });
+      document.getElementById('watch-col').value = '';
+      watchRender();
+      UI.toast('Agente aggiunto', 'success');
+    } catch (e) { _watch.pop(); UI.toast('Errore salvataggio: ' + e.message, 'danger'); }
+  }
+  async function watchEdit(i, field, value) {
+    if (!_watch[i]) return;
+    const prev = _watch[i][field];
+    _watch[i][field] = value.trim ? value.trim() : value;
+    try { await watchSave(); UI.toast('Salvato', 'success'); }
+    catch (e) { _watch[i][field] = prev; watchRender(); UI.toast('Errore salvataggio: ' + e.message, 'danger'); }
+  }
+  async function watchRemove(i) {
+    const w = _watch[i];
+    if (!w || !UI.confirm(`Togliere ${w.name} dall'elenco?`)) return;
+    _watch.splice(i, 1);
+    try { await watchSave(); watchRender(); } catch (e) { _watch.splice(i, 0, w); UI.toast('Errore salvataggio: ' + e.message, 'danger'); }
+  }
+
   let _sallyReg = [];
   const fmtDay = iso => iso ? new Date(iso).toLocaleDateString('it-IT', { timeZone: 'Europe/Rome', day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
@@ -759,5 +817,6 @@ const Admin = (() => {
     impersonate: id => Auth.impersonate(id),
     sallyAnalyze, sallyApply, sallyCancel,
     sallyRegSync, sallyRegAdd, sallyRegRemove, sallyRegRender,
+    watchAdd, watchEdit, watchRemove,
   };
 })();
