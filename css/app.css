@@ -885,3 +885,9 @@ tr.ec-focus .ec-pratica-btn { box-shadow: 0 0 0 3px rgba(214, 57, 57, .45); back
 }
 .ec-checked-badge small { font-weight: 500; opacity: .9; font-size: .7rem; }
 html[data-bs-theme="dark"] .ec-checked-badge { color: #6fd6ea; background: rgba(12, 168, 199, .2); }
+
+/* Piano di lavoro: selezione multipla */
+.ec-plan-chk { cursor: pointer; }
+.ec-grid tr.ec-sel td, .ec-grid tr.ec-sel:hover td { background: #e3edfb; }
+html[data-bs-theme="dark"] .ec-grid tr.ec-sel td, html[data-bs-theme="dark"] .ec-grid tr.ec-sel:hover td { background: #243659; }
+.ec-grid[data-colleague] th.ec-col-id, .ec-grid[data-colleague] td.ec-col-id { min-width: 172px; width: 172px; }
