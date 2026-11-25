@@ -1,5 +1,9 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.32.0', date: '2026-11-25', items: [
+    'Piani di lavoro (admin e top): selezione multipla con caselle accanto a ogni pratica, casella "Seleziona" per tutte le filtrate e selezione a intervallo con Maiusc. Dalla barra puoi spostare le pratiche selezionate a un altro utente o toglierle dal piano (tornano nel pool Da assegnare).',
+    'Pool "Da assegnare": le pratiche con Conformità o Originale Archiviato già compilati nel report ora risultano "Già controllate" (badge "Da report") e compaiono nell\'avviso di assegnazione, non più come mai controllate.',
+  ] },
   { v: '1.31.0', date: '2026-11-24', items: [
     'Configurazione colleghi: gli stati presenti nel report ma non ancora in elenco vengono aggiunti in automatico, disattivati per tutti i colleghi. Ad ogni nuovo report i nuovi stati compaiono da soli e li attivi tu.',
   ] },
