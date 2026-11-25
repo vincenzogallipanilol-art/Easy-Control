@@ -1191,6 +1191,89 @@
       <option value="">Esito…</option><option value="conforme">Conforme</option><option value="integrazioni">Richiesta integrazioni</option>
     </select>`;
 
+  // Selezione multipla nel pool "Da chiamare" (top/admin): trasferisce le pratiche a un altro collega
+  const callSel = new Set();
+  let callLast = null;
+  const callSelPids = () => [...callSel].filter(pid => work[pid] && workState(pid).phase === 'call');
+  const callChk = pid => canSeeAll
+    ? `<input type="checkbox" class="form-check-input m-0 me-2 align-middle ec-call-chk" data-pid="${esc(pid)}" ${callSel.has(pid) ? 'checked' : ''}
+        onclick="App.callToggle(this, event)" aria-label="Seleziona pratica ${esc(pid)}"/>` : '';
+  function callBarHtml() {
+    if (!canSeeAll) return '';
+    const n = callSelPids().length;
+    const opts = colleagues.filter(c => c.active).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+    return `
+      <div class="card-body py-2 border-bottom d-flex flex-wrap align-items-center gap-2${n ? ' ec-bulk-bar' : ''}" data-call-bar>
+        <label class="form-check m-0 d-flex align-items-center gap-1 small text-muted" title="Seleziona tutte le pratiche mostrate">
+          <input type="checkbox" class="form-check-input m-0 ec-call-all" onclick="App.callToggleAll(this)" aria-label="Seleziona tutte le pratiche mostrate"/> Seleziona</label>
+        ${n ? `<strong>${fmt(n)} selezionate</strong>
+        <select class="form-select form-select-sm" style="width:auto" data-call-to><option value="">— trasferisci a —</option>${opts}</select>
+        <button type="button" class="btn btn-sm btn-primary" onclick="App.callBulkMove(this)">Trasferisci</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="App.callClearSel(this)">Deseleziona</button>` : ''}
+      </div>`;
+  }
+  const callScope = el => el.closest('[data-plan-call]') || $('pool-content') || document;
+  function callSyncBar(scope) {
+    const bar = scope.querySelector('[data-call-bar]');
+    if (!bar) return;
+    const keep = bar.querySelector('[data-call-to]')?.value || '';
+    bar.outerHTML = callBarHtml();
+    const nb = scope.querySelector('[data-call-bar]');
+    const to = nb && nb.querySelector('[data-call-to]');
+    if (to && keep) to.value = keep;
+    const chks = [...scope.querySelectorAll('.ec-call-chk')];
+    chks.forEach(c => c.closest('tr')?.classList.toggle('ec-sel', c.checked));
+    const all = nb && nb.querySelector('.ec-call-all');
+    if (all) { const n = chks.filter(c => c.checked).length; all.checked = chks.length > 0 && n === chks.length; all.indeterminate = n > 0 && n < chks.length; }
+  }
+  function callToggle(el, ev) {
+    const scope = callScope(el), pid = el.dataset.pid;
+    const chks = [...scope.querySelectorAll('.ec-call-chk')];
+    if (ev && ev.shiftKey && callLast && callLast !== pid) {
+      const a = chks.findIndex(c => c.dataset.pid === callLast), b = chks.findIndex(c => c.dataset.pid === pid);
+      if (a > -1 && b > -1) for (const c of chks.slice(Math.min(a, b), Math.max(a, b) + 1)) { c.checked = el.checked; el.checked ? callSel.add(c.dataset.pid) : callSel.delete(c.dataset.pid); }
+    } else if (el.checked) callSel.add(pid); else callSel.delete(pid);
+    callLast = pid;
+    callSyncBar(scope);
+  }
+  function callToggleAll(el) {
+    const scope = callScope(el);
+    scope.querySelectorAll('.ec-call-chk').forEach(c => { c.checked = el.checked; el.checked ? callSel.add(c.dataset.pid) : callSel.delete(c.dataset.pid); });
+    callLast = null;
+    callSyncBar(scope);
+  }
+  function callClearSel(btn) {
+    const scope = callScope(btn);
+    callSel.clear(); callLast = null;
+    scope.querySelectorAll('.ec-call-chk').forEach(c => { c.checked = false; });
+    callSyncBar(scope);
+  }
+  async function callBulkMove(btn) {
+    const scope = callScope(btn);
+    const to = scope.querySelector('[data-call-to]')?.value;
+    if (!to) { UI.toast('Scegli il collega a cui trasferire', 'warning'); return; }
+    const pids = callSelPids();
+    if (!pids.length) return;
+    if (!UI.confirm(`Trasferire ${pids.length} pratiche da chiamare a ${colName(to)}?`)) return;
+    try {
+      const rows = await DB.moveWork(pids, to);
+      for (const r of rows) { work[r.pratica_id] = r; callSel.delete(r.pratica_id); }
+      // la pratica passa anche nel piano del nuovo collega (dove tornera' con l'esito)
+      const { data: { user } } = await db.auth.getUser();
+      const now = new Date().toISOString();
+      const asg = rows.map(r => practiceByPid[r.pratica_id])
+        .filter(p => p && p.id && activeReport && assignments[p.id]?.colleague_id !== to)
+        .map(p => ({ practice_id: p.id, report_id: activeReport.id, colleague_id: to, assigned_by: user.id, is_manual: true, assigned_at: now }));
+      if (asg.length) {
+        await DB.bulkUpsertAssignments(asg);
+        for (const r of asg) assignments[r.practice_id] = { ...assignments[r.practice_id], ...r };
+      }
+      if (rows.length < pids.length) UI.toast(`${rows.length} pratiche trasferite su ${pids.length}: le altre non sono modificabili con il tuo ruolo`, 'warning');
+      else UI.toast(`${rows.length} pratiche da chiamare trasferite a ${colName(to)}`, 'success');
+      fullRenderSoon();
+    } catch (e) { UI.toast('Errore trasferimento: ' + e.message, 'danger'); }
+  }
+
   function callPoolHtml(calls, colleagueId) {
     if (!calls.length) return '';
     const ro = colleagueId && !canEditColleague(colleagueId) ? 'disabled' : '';
@@ -1199,6 +1282,7 @@
         <div class="card-header">
           <h3 class="card-title"><span class="ec-st-dot" style="background:${UI.WORK_STATUSES.da_chiamare.hex}"></span> Da chiamare — ${calls.length}</h3>
         </div>
+        ${callBarHtml()}
         <div class="ec-grid-wrap ec-grid-wrap--auto">
           <table class="ec-grid ec-grid--pool">
             <thead><tr>
@@ -1207,8 +1291,8 @@
             </tr></thead>
             <tbody>
               ${calls.map(w => `
-                <tr data-pid="${esc(w.pratica_id)}" class="${w.called ? 'is-called' : ''}">
-                  <td class="ec-col-id">${UI.praticaLink(w.pratica_id)}</td>
+                <tr data-pid="${esc(w.pratica_id)}" class="${w.called ? 'is-called' : ''}${callSel.has(w.pratica_id) ? ' ec-sel' : ''}">
+                  <td class="ec-col-id">${callChk(w.pratica_id)}${UI.praticaLink(w.pratica_id)}</td>
                   ${cell(w.cognome)}
                   <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
                   ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
@@ -2121,6 +2205,7 @@
     const calls = poolTab === 'da_chiamare';
     const shown = _poolShowAll ? rows : rows.slice(0, PAGE);
     return `
+      ${calls ? callBarHtml() : ''}
       <div class="ec-grid-wrap ec-grid-wrap--auto">
         <table class="ec-grid ec-grid--pool">
           <thead><tr>
@@ -2130,8 +2215,8 @@
           </tr></thead>
           <tbody>
             ${shown.map(({ w, stato }) => `
-              <tr data-pid="${esc(w.pratica_id)}" class="${calls && w.called ? 'is-called' : ''}">
-                <td class="ec-col-id">${UI.praticaLink(w.pratica_id)}</td>
+              <tr data-pid="${esc(w.pratica_id)}" class="${calls && w.called ? 'is-called' : ''}${calls && callSel.has(w.pratica_id) ? ' ec-sel' : ''}">
+                <td class="ec-col-id">${calls ? callChk(w.pratica_id) : ''}${UI.praticaLink(w.pratica_id)}</td>
                 ${cell(w.cognome)}${cell(w.nome)}
                 <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
                 ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
@@ -2626,7 +2711,7 @@
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
     setCalled, setCallOutcome, setPoolNote, closePoolRow, openIntegra, refillPlan,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
-    assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, planToggle, planToggleAll, planClearSel, planBulkMove, planBulkRemove, filterPool, showAllPool, poolSet, poolReset,
+    assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, callToggle, callToggleAll, callClearSel, callBulkMove, planToggle, planToggleAll, planClearSel, planBulkMove, planBulkRemove, filterPool, showAllPool, poolSet, poolReset,
     sendChat, chatOpen, openNotification,
     impersonate: id => Auth.impersonate(id),
   };
