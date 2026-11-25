@@ -1167,12 +1167,13 @@
 
     return `
       <tr data-pid="${esc(pid)}" data-st="${st}"
-          class="${def ? 'has-st' : ''}${pid in pending ? ' is-pending' : ''}" ${def ? `style="--st:${def.hex}"` : ''}>
+          class="${def ? 'has-st' : ''}${pid in pending ? ' is-pending' : ''}${planSel.has(p.id) ? ' ec-sel' : ''}" ${def ? `style="--st:${def.hex}"` : ''}>
         <td class="ec-col-status">
           <select class="form-select form-select-sm ec-status-select" data-fkey="st:${esc(pid)}" ${off}
             aria-label="Stato pratica ${esc(pid)}" onchange="App.setStatus(this)">${statusOptions(st)}</select>
         </td>
-        <td class="ec-col-id">${UI.praticaLink(pid)}${canSeeAll && p.id ? `
+        <td class="ec-col-id">${canSeeAll && p.id ? `<input type="checkbox" class="form-check-input m-0 me-2 align-middle ec-plan-chk" data-practice="${esc(p.id)}" ${planSel.has(p.id) ? 'checked' : ''}
+          onclick="App.planToggle(this, event)" aria-label="Seleziona pratica ${esc(pid)}"/>` : ''}${UI.praticaLink(pid)}${canSeeAll && p.id ? `
           <select class="form-select form-select-sm ec-move" data-practice="${esc(p.id)}" title="Sposta a un altro collega" aria-label="Sposta pratica ${esc(pid)}"
             onmouseenter="App.moveFill(this)" onfocus="App.moveFill(this)" onchange="App.moveFromPlan(this)"><option value="">⇄</option></select>` : ''}</td>
         ${cells}
@@ -1265,6 +1266,8 @@
     return `
       <div class="card ec-plan" data-plan="${cid}">
         <div class="card-header ec-plan-toolbar">
+          ${canSeeAll && rows.length ? `<label class="form-check m-0 d-flex align-items-center gap-1 text-muted small" title="Seleziona tutte le pratiche filtrate">
+            <input type="checkbox" class="form-check-input m-0 ec-plan-all" onclick="App.planToggleAll(this)" aria-label="Seleziona tutte le pratiche filtrate"/> Seleziona</label>` : ''}
           <div class="ec-chips" data-plan-chips></div>
           <div class="ms-auto d-flex align-items-center gap-3">
             <small class="text-muted d-none d-xxl-inline">Scrivi @nome nella nota per taggare un collega</small>
@@ -1273,6 +1276,7 @@
               placeholder="Cerca pratica, nome, agente…" value="${esc(f.q)}" aria-label="Cerca nel piano" oninput="App.planSearch(this)"/>
           </div>
         </div>
+        <div data-plan-bulk></div>
         <div data-plan-refill="${cid}"></div>
         ${grid}
       </div>
@@ -1422,6 +1426,7 @@
     const cnt = card.querySelector('[data-plan-count]');
     if (cnt) cnt.textContent = v.filtered.length === v.rows.length
       ? `${fmt(v.rows.length)} pratiche` : `${fmt(v.filtered.length)} di ${fmt(v.rows.length)} pratiche`;
+    if (canSeeAll) planSyncSel(card);
   }
 
   function planMore(btn) {
@@ -1895,7 +1900,7 @@
     nominativo: r => `${r.cognome} ${r.nome}`.trim(),
     tipologia: r => r.tipologia, stato: r => r.stato, agente: r => r.agente,
     motivo: r => REASON_LABELS[r.reason] || '',
-    controllata: r => poolChecked[r.pid] ? 'Già controllata' : (poolChecksFetched.has(r.pid) ? 'Non controllata' : '…'),
+    controllata: r => wasChecked(r.pid) ? 'Già controllata' : (poolChecksFetched.has(r.pid) ? 'Non controllata' : '…'),
     istituto: r => (r.w && r.w.istituto_finanziario) || '',
     operatore: r => r.w ? (userName(r.w.set_by) || colName(r.w.colleague_id) || '') : '',
     segnalata: r => r.w ? new Date(r.w.set_at).toLocaleDateString('it-IT') : '',
@@ -1923,12 +1928,25 @@
       .catch(() => { /* il log non e' leggibile: nessun avviso */ })
       .finally(() => { poolChecksBusy = false; });
   }
+  // Conformita' / Originale Archiviato gia' compilati nel report = pratica gia' lavorata prima
+  const reportChecked = pid => {
+    const p = practiceByPid[pid];
+    if (!p) return null;
+    const conf = String(p.conformita_documentazione || '').trim(), orig = String(p.originale_archiviato || '').trim();
+    return conf || orig ? { conf, orig } : null;
+  };
+  const wasChecked = pid => !!(poolChecked[pid] || reportChecked(pid));
   const checkWhen = c => String(c.check_day || '').split('-').reverse().join('/');
   const checkWho = c => userName(c.user_id) || colName(c.colleague_id) || '';
   const checkedText = c => `${checkWhen(c)} · ${(UI.WORK_STATUSES[c.status] || {}).label || c.status}${checkWho(c) ? ' · ' + checkWho(c) : ''}`;
   const checkedCell = pid => {
     const c = poolChecked[pid];
     if (c) return `<td><span class="ec-checked-badge" title="Già controllata: ${esc(checkedText(c))}">&#10003; ${esc(checkWhen(c))}<small>${esc((UI.WORK_STATUSES[c.status] || {}).short || '')}${checkWho(c) ? ' · ' + esc(checkWho(c)) : ''}</small></span></td>`;
+    const rc = reportChecked(pid);
+    if (rc) {
+      const det = [rc.conf && `Conformità: ${rc.conf}`, rc.orig && `Originale archiviato: ${rc.orig}`].filter(Boolean).join(' · ');
+      return `<td><span class="ec-checked-badge" title="Già controllata: ${esc(det)} (dal report)">&#10003; Da report<small>${esc(det)}</small></span></td>`;
+    }
     return `<td class="text-muted small">${poolChecksFetched.has(pid) ? '—' : '…'}</td>`;
   };
   // Finestra con piu' scelte: ritorna il valore del pulsante premuto (null = annulla)
@@ -2171,12 +2189,12 @@
     let ids = [...poolSel].filter(id => practiceById[id]);
     if (!ids.length) return;
     try { await ensurePoolChecks(ids.map(id => practiceById[id].pratica_id)); } catch (_) { /* log non leggibile */ }
-    const done = ids.filter(id => poolChecked[practiceById[id].pratica_id]);
+    const done = ids.filter(id => wasChecked(practiceById[id].pratica_id));
     if (done.length) {
       const free = ids.length - done.length;
       const doneSet = new Set(done);
       const msg = free
-        ? `Ne hai selezionate <strong>${fmt(ids.length)}</strong>, ma solo <strong>${fmt(free)}</strong> non sono ancora state controllate (<strong>${fmt(done.length)}</strong> già controllate in passato).<br>Vuoi assegnare a ${esc(colName(to))} solo le ${fmt(free)} non controllate?`
+        ? `Ne hai selezionate <strong>${fmt(ids.length)}</strong>, ma solo <strong>${fmt(free)}</strong> non sono ancora state controllate (<strong>${fmt(done.length)}</strong> già controllate in passato o con Conformità/Originale archiviato già compilati).<br>Vuoi assegnare a ${esc(colName(to))} solo le ${fmt(free)} non controllate?`
         : `Le <strong>${fmt(ids.length)}</strong> pratiche selezionate sono tutte già state controllate in passato. Vuoi assegnarle comunque a ${esc(colName(to))}?`;
       const buttons = free
         ? [{ value: 'free', label: `Solo le ${fmt(free)} non controllate` }, { value: 'all', label: `Tutte le ${fmt(ids.length)}`, cls: 'btn-outline-primary' }]
@@ -2220,11 +2238,105 @@
     } catch (e) { sel.value = ''; UI.toast('Errore spostamento: ' + e.message, 'danger'); }
   }
 
+  // Selezione multipla nel piano di lavoro (top/admin): sposta o togli piu' pratiche in una volta
+  const planSel = new Set();
+  let planLast = null;
+  const planSelIds = cid => { const v = planView[cid]; return v ? v.rows.filter(p => p.id && planSel.has(p.id)).map(p => p.id) : []; };
+  function planSyncSel(card) {
+    const cid = card.dataset.plan, v = planView[cid];
+    if (!v) return;
+    card.querySelectorAll('tbody tr[data-pid]').forEach(tr => {
+      const c = tr.querySelector('.ec-plan-chk');
+      if (c) tr.classList.toggle('ec-sel', c.checked);
+    });
+    const f = v.filtered.filter(p => p.id), n = f.filter(p => planSel.has(p.id)).length;
+    const all = card.querySelector('.ec-plan-all');
+    if (all) { all.checked = f.length > 0 && n === f.length; all.indeterminate = n > 0 && n < f.length; }
+    const box = card.querySelector('[data-plan-bulk]');
+    if (!box) return;
+    const total = planSelIds(cid).length;
+    if (!total) { box.innerHTML = ''; return; }
+    if (box.querySelector('.ec-bulk-bar')) { box.querySelector('[data-plan-count-sel]').textContent = `${fmt(total)} selezionate`; return; }
+    const opts = colleagues.filter(c => c.active && c.id !== cid).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
+    box.innerHTML = `
+      <div class="card-body py-2 border-bottom d-flex flex-wrap align-items-center gap-2 ec-bulk-bar">
+        <strong data-plan-count-sel>${fmt(total)} selezionate</strong>
+        <select class="form-select form-select-sm" style="width:auto" data-plan-bulk-to><option value="">— sposta a —</option>${opts}</select>
+        <button type="button" class="btn btn-sm btn-primary" onclick="App.planBulkMove(this)">Sposta</button>
+        <button type="button" class="btn btn-sm btn-outline-danger" onclick="App.planBulkRemove(this)" title="Le pratiche tornano nel pool Da assegnare">Togli dal piano</button>
+        <button type="button" class="btn btn-sm btn-outline-secondary" onclick="App.planClearSel(this)">Deseleziona</button>
+      </div>`;
+  }
+  function planToggle(el, ev) {
+    const card = el.closest('[data-plan]'), id = el.dataset.practice;
+    if (!card) return;
+    const list = planView[card.dataset.plan].filtered.map(p => p.id);
+    if (ev && ev.shiftKey && planLast && planLast !== id) {
+      const a = list.indexOf(planLast), b = list.indexOf(id);
+      if (a > -1 && b > -1) for (const x of list.slice(Math.min(a, b), Math.max(a, b) + 1)) {
+        if (!x) continue;
+        el.checked ? planSel.add(x) : planSel.delete(x);
+        const cb = card.querySelector(`.ec-plan-chk[data-practice="${CSS.escape(x)}"]`);
+        if (cb) cb.checked = el.checked;
+      }
+    } else if (el.checked) planSel.add(id); else planSel.delete(id);
+    planLast = id;
+    planSyncSel(card);
+  }
+  function planToggleAll(el) {
+    const card = el.closest('[data-plan]');
+    if (!card) return;
+    for (const p of planView[card.dataset.plan].filtered) if (p.id) el.checked ? planSel.add(p.id) : planSel.delete(p.id);
+    card.querySelectorAll('.ec-plan-chk').forEach(c => { c.checked = el.checked; });
+    planLast = null;
+    planSyncSel(card);
+  }
+  function planClearSel(btn) {
+    const card = btn.closest('[data-plan]');
+    if (!card) return;
+    for (const p of planView[card.dataset.plan].rows) planSel.delete(p.id);
+    card.querySelectorAll('.ec-plan-chk').forEach(c => { c.checked = false; });
+    planLast = null;
+    planSyncSel(card);
+  }
+  async function planBulkMove(btn) {
+    const card = btn.closest('[data-plan]');
+    const cid = card && card.dataset.plan;
+    const to = card && card.querySelector('[data-plan-bulk-to]')?.value;
+    if (!to) { UI.toast('Scegli il collega a cui spostare', 'warning'); return; }
+    const ids = planSelIds(cid);
+    if (!ids.length) return;
+    if (!UI.confirm(`Spostare ${ids.length} pratiche da ${colName(cid)} a ${colName(to)}?`)) return;
+    try {
+      const { data: { user } } = await db.auth.getUser();
+      const now = new Date().toISOString();
+      const rows = ids.map(id => ({ practice_id: id, report_id: activeReport.id, colleague_id: to, assigned_by: user.id, is_manual: true, assigned_at: now }));
+      await DB.bulkUpsertAssignments(rows);
+      for (const r of rows) { assignments[r.practice_id] = { ...assignments[r.practice_id], ...r }; planSel.delete(r.practice_id); }
+      UI.toast(`${rows.length} pratiche spostate a ${colName(to)}`, 'success');
+      fullRenderSoon();
+    } catch (e) { UI.toast('Errore spostamento: ' + e.message, 'danger'); }
+  }
+  async function planBulkRemove(btn) {
+    const card = btn.closest('[data-plan]');
+    const cid = card && card.dataset.plan;
+    const ids = planSelIds(cid);
+    if (!ids.length) return;
+    if (!UI.confirm(`Togliere ${ids.length} pratiche dal piano di ${colName(cid)}? Tornano nel pool Da assegnare.`)) return;
+    try {
+      const done = await DB.deleteAssignmentsByPractice(ids);
+      for (const id of done) { delete assignments[id]; planSel.delete(id); }
+      if (done.length < ids.length) UI.toast(`${done.length} pratiche tolte su ${ids.length}: le altre non sono rimovibili con il tuo ruolo`, 'warning');
+      else UI.toast(`${done.length} pratiche tolte dal piano di ${colName(cid)}`, 'success');
+      fullRenderSoon();
+    } catch (e) { UI.toast('Errore: ' + e.message, 'danger'); }
+  }
+
   async function assignFromPool(practiceId, colleagueId) {
     if (!colleagueId) return;
     const pid = practiceById[practiceId]?.pratica_id;
-    const c = pid && poolChecked[pid];
-    if (c && !UI.confirm(`La pratica ${pid} è già stata controllata (${checkedText(c)}). Assegnarla comunque?`)) { fullRenderSoon(); return; }
+    const c = pid && (poolChecked[pid] ? checkedText(poolChecked[pid]) : (reportChecked(pid) ? 'Conformità/Originale archiviato già compilati nel report' : ''));
+    if (c && !UI.confirm(`La pratica ${pid} è già stata controllata (${c}). Assegnarla comunque?`)) { fullRenderSoon(); return; }
     try {
       const { data: { user } } = await db.auth.getUser();
       const row = {
@@ -2514,7 +2626,7 @@
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
     setCalled, setCallOutcome, setPoolNote, closePoolRow, openIntegra, refillPlan,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
-    assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, filterPool, showAllPool, poolSet, poolReset,
+    assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, planToggle, planToggleAll, planClearSel, planBulkMove, planBulkRemove, filterPool, showAllPool, poolSet, poolReset,
     sendChat, chatOpen, openNotification,
     impersonate: id => Auth.impersonate(id),
   };
