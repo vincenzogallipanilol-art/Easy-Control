@@ -1,5 +1,9 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.34.0', date: '2026-11-25', items: [
+    'Nuova lista "Agenti con occhio di riguardo" in Configurazione (admin): nome agente, nota e, se vuoi, un collega a cui assegnare sempre le sue pratiche (dopo il salvataggio premi Ricalcola).',
+    'Le pratiche di questi agenti hanno il nome in rosso con badge in piani di lavoro, pool e Da chiamare. Impostando uno stato diverso da Conforme compare un avviso con la nota (es. non mandare mail).',
+  ] },
   { v: '1.33.0', date: '2026-11-25', items: [
     'Pool "Da chiamare" (admin e top): selezione multipla delle pratiche, anche nella scheda "Da chiamare" del piano di un collega. Con "Trasferisci" le sposti a un altro collega: la pratica passa nel suo piano e tornerà a lui con l\'esito.',
   ] },
