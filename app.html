@@ -12,8 +12,8 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"/>
-  <link rel="stylesheet" href="css/app.css?v=1.33.0"/>
-  <script src="js/theme.js?v=1.33.0"></script>
+  <link rel="stylesheet" href="css/app.css?v=1.34.0"/>
+  <script src="js/theme.js?v=1.34.0"></script>
 </head>
 <body class="antialiased">
 
@@ -318,6 +318,28 @@
             </div>
           </div>
 
+          <!-- Agenti con occhio di riguardo (solo Admin) -->
+          <div class="card mb-4">
+            <div class="card-header">
+              <h3 class="card-title">Agenti con occhio di riguardo <span class="badge bg-danger-lt text-danger ms-2" id="watch-count">0</span></h3>
+            </div>
+            <div class="card-body">
+              <p class="text-muted small mb-2">Le pratiche di questi agenti (colonna <b>Agente attuale</b> del report) vengono evidenziate in rosso ovunque, e chi imposta uno stato diverso da Conforme riceve un avviso con la nota. Facoltativo: <b>assegna sempre a</b> un collega, così le loro pratiche vanno solo a lui (dopo il salvataggio premi Ricalcola).</p>
+              <div class="row g-2 align-items-center mb-3">
+                <div class="col-md-4"><input type="text" id="watch-name" class="form-control" list="watch-agents-dl" placeholder="Nome e cognome agente (come nel report)" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();Admin.watchAdd();}"/><datalist id="watch-agents-dl"></datalist></div>
+                <div class="col-md-4"><input type="text" id="watch-note" class="form-control" placeholder="Nota (es. non mandare mail, non segnalare)" autocomplete="off" onkeydown="if(event.key==='Enter'){event.preventDefault();Admin.watchAdd();}"/></div>
+                <div class="col-md-3"><select id="watch-col" class="form-select"><option value="">Nessuna assegnazione</option></select></div>
+                <div class="col-md-1"><button type="button" class="btn btn-primary w-100" onclick="Admin.watchAdd()">Aggiungi</button></div>
+              </div>
+              <div class="table-responsive">
+                <table class="table table-vcenter card-table">
+                  <thead><tr><th>Agente</th><th>Nota</th><th>Assegna sempre a</th><th class="w-1"></th></tr></thead>
+                  <tbody id="watch-tbody"><tr><td colspan="4" class="text-center text-muted py-3">Nessun agente in elenco</td></tr></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+
           <!-- Registro Sally: pratiche gia' controllate (solo Admin) -->
           <div class="card mb-4">
             <div class="card-header">
@@ -507,22 +529,22 @@
 <!-- ── SCRIPTS ──────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/config.js?v=1.33.0"></script>
-<script src="js/supabase-client.js?v=1.33.0"></script>
-<script src="js/auth.js?v=1.33.0"></script>
-<script src="js/cache.js?v=1.33.0"></script>
-<script src="js/db.js?v=1.33.0"></script>
-<script src="js/engine.js?v=1.33.0"></script>
-<script src="js/realtime.js?v=1.33.0"></script>
-<script src="js/colfilter.js?v=1.33.0"></script>
-<script src="js/version.js?v=1.33.0"></script>
-<script src="js/changelog.js?v=1.33.0"></script>
-<script src="js/updates.js?v=1.33.0"></script>
-<script src="js/focus.js?v=1.33.0"></script>
-<script src="js/ui.js?v=1.33.0"></script>
-<script src="js/modelli.js?v=1.33.0"></script>
-<script src="js/admin.js?v=1.33.0"></script>
-<script src="js/app.js?v=1.33.0"></script>
+<script src="js/config.js?v=1.34.0"></script>
+<script src="js/supabase-client.js?v=1.34.0"></script>
+<script src="js/auth.js?v=1.34.0"></script>
+<script src="js/cache.js?v=1.34.0"></script>
+<script src="js/db.js?v=1.34.0"></script>
+<script src="js/engine.js?v=1.34.0"></script>
+<script src="js/realtime.js?v=1.34.0"></script>
+<script src="js/colfilter.js?v=1.34.0"></script>
+<script src="js/version.js?v=1.34.0"></script>
+<script src="js/changelog.js?v=1.34.0"></script>
+<script src="js/updates.js?v=1.34.0"></script>
+<script src="js/focus.js?v=1.34.0"></script>
+<script src="js/ui.js?v=1.34.0"></script>
+<script src="js/modelli.js?v=1.34.0"></script>
+<script src="js/admin.js?v=1.34.0"></script>
+<script src="js/app.js?v=1.34.0"></script>
 
 </body>
 </html>
