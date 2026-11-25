@@ -380,6 +380,18 @@ const DB = (() => {
     if (error) throw error;
     return (data && data[0]) || null;
   }
+  // Trasferisce piu' pratiche (pool "Da chiamare") a un altro collega; ritorna le righe aggiornate
+  async function moveWork(praticaIds, colleagueId) {
+    const out = [];
+    await inChunks(praticaIds, 200, 3, async part => {
+      const { data, error } = await db.from('practice_work')
+        .update({ colleague_id: colleagueId, updated_at: new Date().toISOString() })
+        .in('pratica_id', part).select();
+      if (error) throw error;
+      out.push(...(data || []));
+    });
+    return out;
+  }
   async function closeWork(praticaId) {
     const { data: { user } } = await db.auth.getUser();
     return updateWork(praticaId, { closed_at: new Date().toISOString(), closed_by: user.id });
@@ -460,7 +472,7 @@ const DB = (() => {
     getColleagues, upsertColleague, deleteColleague,
     getReports, getActiveReport, createReport,
     insertPractices, getPractices,
-    getAssignments, getPoolCandidates, claimPractices, upsertAssignment, bulkUpsertAssignments, deleteAssignmentsByPractice, deleteAutoAssignments,
+    getAssignments, getPoolCandidates, claimPractices, upsertAssignment, bulkUpsertAssignments, deleteAssignmentsByPractice, moveWork, deleteAutoAssignments,
     getDistinctTipologie, getDistinctAgenti,
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser,
