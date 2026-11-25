@@ -179,11 +179,39 @@
     }
     return { lockedPids, baseQuotas };
   }
+  // Agenti con occhio di riguardo (Configurazione): badge rosso + avviso, assegnazione opzionale a un collega
+  let _watchKey = null, _watchMap = new Map();
+  function watchFor(name) {
+    const k = JSON.stringify(config.watched_agents || []);
+    if (k !== _watchKey) {
+      _watchKey = k;
+      _watchMap = new Map((Array.isArray(config.watched_agents) ? config.watched_agents : []).filter(w => w && w.name).map(w => [norm(w.name), w]));
+    }
+    return name && _watchMap.size ? _watchMap.get(norm(name)) || null : null;
+  }
+  const watchTip = w => `Agente con occhio di riguardo${w.note ? ': ' + w.note : ''}`;
+  const watchTag = name => { const w = watchFor(name); return w ? ` <span class="ec-watch-tag" title="${esc(watchTip(w))}">&#9888; ${esc(name)}</span>` : ''; };
+  // Avviso prima di segnalare / chiedere integrazioni su una pratica di un agente da trattare con cautela
+  function watchConfirm(pid, status) {
+    if (!status || status === 'conforme') return true;
+    const w = watchFor(practiceByPid[pid]?.agente_attuale || work[pid]?.agente_attuale);
+    if (!w) return true;
+    return UI.confirm(`ATTENZIONE: ${w.name} è un agente con occhio di riguardo${w.note ? ` (${w.note})` : ''}.\nImpostare "${(UI.WORK_STATUSES[status] || {}).label || status}" sulla pratica ${pid}?`);
+  }
+  function dedicatedAll() {
+    const ded = JSON.parse(JSON.stringify(Engine.dedicatedFromConfig(config, agentExclusions)));
+    for (const w of (Array.isArray(config.watched_agents) ? config.watched_agents : [])) {
+      if (!w || !w.name || !w.colleague_id) continue;
+      const d = ded[w.colleague_id] || (ded[w.colleague_id] = { agents: [], only: false });
+      if (!d.agents.some(a => norm(a) === norm(w.name))) d.agents.push(w.name);
+    }
+    return ded;
+  }
   function runEngine(manual) {
     return Engine.distribute(
       practices, colleagues, colleagueStateFilters, config.working_days || 1,
       manual, [], null,
-      { ...engineOpts(), dedicated: Engine.dedicatedFromConfig(config, agentExclusions) }
+      { ...engineOpts(), dedicated: dedicatedAll() }
     );
   }
   const manualAssignments = () => Object.values(assignments).filter(a => a.is_manual);
@@ -1109,6 +1137,7 @@
   const planView  = {};  // colleague_id -> { rows, filtered, limit } (righe disegnate a blocchi)
   const dash = '<span class="text-muted">—</span>';
   const cell = v => `<td title="${esc(v)}">${v ? esc(v) : dash}</td>`;
+  const agentCell = v => { const w = watchFor(v); return w ? `<td title="${esc(watchTip(w))}"><span class="ec-watch-agent">&#9888; ${esc(v)}</span></td>` : cell(v); };
   // Chi ha inserito lo stato (utente) e, se diverso, il piano di lavoro da cui arriva
   function senderCell(w) {
     const who = userName(w.set_by), plan = colName(w.colleague_id);
@@ -1162,6 +1191,7 @@
             onchange="App.saveNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
         </td>`;
       if (key === 'stato_attuale') return `<td>${UI.statoBadge(esc(p.stato_attuale))}</td>`;
+      if (key === 'agente_attuale') return agentCell(p[key]);
       return cell(p[key]);
     }).join('');
 
@@ -1295,7 +1325,7 @@
                   <td class="ec-col-id">${callChk(w.pratica_id)}${UI.praticaLink(w.pratica_id)}</td>
                   ${cell(w.cognome)}
                   <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
-                  ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
+                  ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${agentCell(w.agente_attuale)}
                   <td>${calledCell(w, ro)}</td>
                   <td class="ec-col-note">
                     <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
@@ -1426,7 +1456,7 @@
     if (btn) { btn.disabled = true; btn.textContent = 'Ricerca in corso…'; }
     try {
       const nrm = x => (x || '').toLowerCase().trim();
-      const dedicated = Engine.dedicatedFromConfig(config, agentExclusions);
+      const dedicated = dedicatedAll();
       const tips = [...new Set([...(c.primary_tipologie || []), ...(c.secondary_tipologie || [])].map(nrm))].filter(Boolean);
       const agents = ((dedicated[cid] || {}).agents || []).map(nrm);
       const seenPid = new Set();
@@ -1641,6 +1671,7 @@
     const noteInput = tr.querySelector('.ec-note-input');
     const note = noteInput.value.trim();
     const def = UI.WORK_STATUSES[status];
+    if (!watchConfirm(pid, status)) { sel.value = effStatus(pid) || ''; return; }
 
     if (def && def.note && !note) {
       // nota obbligatoria: lo stato resta in sospeso finche' non viene scritta
@@ -1752,6 +1783,7 @@
       if (noteEl) noteEl.focus();
       return;
     }
+    if (!watchConfirm(pid, status)) { sel.value = ''; return; }
     if (!UI.confirm(`Segnare la pratica ${pid} come "${UI.WORK_STATUSES[status].label}"? Uscirà dal pool Da chiamare.`)) { sel.value = ''; return; }
     try {
       const row = await DB.setPracticeWork({
@@ -2150,12 +2182,12 @@
         <td class="w-1"><input type="checkbox" class="form-check-input m-0 pool-chk" data-practice="${r.p.id}" ${poolSel.has(r.p.id) ? 'checked' : ''}
           onclick="App.poolToggle(this, event)" aria-label="Seleziona pratica ${esc(r.pid)}"/></td>
         <td class="font-monospace small">${UI.praticaLink(r.pid)}</td>
-        <td>${esc(r.cognome)} ${esc(r.nome)}</td>
+        <td>${esc(r.cognome)} ${esc(r.nome)}${showAssign ? watchTag(r.agente) : ''}</td>
         <td class="text-muted small">${esc(r.tipologia) || '—'}</td>
         <td>${UI.statoBadge(esc(r.stato))}</td>
         <td class="text-muted small">${REASON_LABELS[r.reason] || '—'}</td>
         ${checkedCell(r.pid)}
-        ${showAssign ? '' : `<td class="text-muted small">${esc(r.agente) || '—'}</td>`}
+        ${showAssign ? '' : agentCell(r.agente)}
         <td>
           <select class="form-select form-select-sm" style="width:auto" data-practice="${r.p.id}"
             onchange="App.assignFromPool(this.dataset.practice, this.value)">
@@ -2219,7 +2251,7 @@
                 <td class="ec-col-id">${calls ? callChk(w.pratica_id) : ''}${UI.praticaLink(w.pratica_id)}</td>
                 ${cell(w.cognome)}${cell(w.nome)}
                 <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
-                ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${cell(w.agente_attuale)}
+                ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${agentCell(w.agente_attuale)}
                 <td>${UI.statoBadge(esc(stato))}</td>
                 ${senderCell(w)}
                 <td>${new Date(w.set_at).toLocaleDateString('it-IT')}</td>
