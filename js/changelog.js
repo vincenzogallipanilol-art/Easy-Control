@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.36.0', date: '2026-11-26', items: [
+    'Utenti (admin): nuovo pulsante "Password" per impostare direttamente la password di un utente e farlo accedere.',
+  ] },
   { v: '1.35.0', date: '2026-11-26', items: [
     'Login: nuovo link "Password dimenticata?". Inserisci l\'email, ricevi il link e imposti la nuova password.',
   ] },
