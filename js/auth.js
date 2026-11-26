@@ -46,6 +46,18 @@ const Auth = (() => {
     return data;
   }
 
+  // Invia la mail con il link di recupero (torna alla pagina di login, che mostra il form della nuova password)
+  async function resetPassword(email) {
+    const { error } = await db.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
+    if (error) throw error;
+  }
+
+  // Imposta la nuova password per l'utente con sessione di recupero (o gia' collegato)
+  async function updatePassword(password) {
+    const { error } = await db.auth.updateUser({ password });
+    if (error) throw error;
+  }
+
   async function signOut() {
     _profile = null; _realProfile = null; _setImpId(null);
     await db.auth.signOut();
@@ -103,5 +115,5 @@ const Auth = (() => {
     if (session) window.location.href = redirectTo;
   }
 
-  return { signIn, signUp, signOut, getSession, getProfile, getRealProfile, isImpersonating, impersonate, stopImpersonating, isAdmin, isTop, canSeeAll, requireAuth, redirectIfLoggedIn };
+  return { signIn, signUp, resetPassword, updatePassword, signOut, getSession, getProfile, getRealProfile, isImpersonating, impersonate, stopImpersonating, isAdmin, isTop, canSeeAll, requireAuth, redirectIfLoggedIn };
 })();
