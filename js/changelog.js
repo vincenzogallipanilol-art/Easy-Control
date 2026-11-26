@@ -1,5 +1,10 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.37.0', date: '2026-11-26', items: [
+    'Versione per cellulare: menu in una barra in basso, intestazione compatta con pulsanti a icona e dashboard a due colonne.',
+    'Su telefono piani di lavoro, pool, utenti e configurazione diventano schede: puoi selezionare, spostare e trasferire le pratiche, impostare stati e note, gestire utenti e password anche fuori casa.',
+    'Utenti: corrette le intestazioni della tabella (Ruolo / Cambia ruolo / Collega).',
+  ] },
   { v: '1.36.1', date: '2026-11-26', items: [
     'Piani di lavoro: tolte le colonne Area Manager, Group Manager e Team Manager.',
   ] },
