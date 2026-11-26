@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.38.0', date: '2026-11-26', items: [
+    'Easy Control si può installare come app: icona sulla schermata del telefono e apertura a tutto schermo (Android: menu del browser → Installa app; iPhone: Condividi → Aggiungi a Home).',
+  ] },
   { v: '1.37.0', date: '2026-11-26', items: [
     'Versione per cellulare: menu in una barra in basso, intestazione compatta con pulsanti a icona e dashboard a due colonne.',
     'Su telefono piani di lavoro, pool, utenti e configurazione diventano schede: puoi selezionare, spostare e trasferire le pratiche, impostare stati e note, gestire utenti e password anche fuori casa.',
