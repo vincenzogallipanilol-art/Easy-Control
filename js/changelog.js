@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.35.0', date: '2026-11-26', items: [
+    'Login: nuovo link "Password dimenticata?". Inserisci l\'email, ricevi il link e imposti la nuova password.',
+  ] },
   { v: '1.34.0', date: '2026-11-25', items: [
     'Nuova lista "Agenti con occhio di riguardo" in Configurazione (admin): nome agente, nota e, se vuoi, un collega a cui assegnare sempre le sue pratiche (dopo il salvataggio premi Ricalcola).',
     'Le pratiche di questi agenti hanno il nome in rosso con badge in piani di lavoro, pool e Da chiamare. Impostando uno stato diverso da Conforme compare un avviso con la nota (es. non mandare mail).',
