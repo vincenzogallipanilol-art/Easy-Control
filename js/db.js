@@ -332,6 +332,11 @@ const DB = (() => {
       .eq('id', userId);
     if (error) throw error;
   }
+  // Solo admin (funzione SQL admin_set_password): imposta la password di un utente
+  async function adminSetPassword(userId, password) {
+    const { error } = await db.rpc('admin_set_password', { target_user: userId, new_password: password });
+    if (error) throw error;
+  }
   async function rejectUser(userId) {
     // Riporta l'utente a 'pending' (nessuna cancellazione dell'account)
     const { error } = await db.from('profiles').update({ status: 'pending' }).eq('id', userId);
@@ -475,7 +480,7 @@ const DB = (() => {
     getAssignments, getPoolCandidates, claimPractices, upsertAssignment, bulkUpsertAssignments, deleteAssignmentsByPractice, moveWork, deleteAutoAssignments,
     getDistinctTipologie, getDistinctAgenti,
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
-    getUsers, setUserRole, setUserColleague, approveUser, rejectUser,
+    getUsers, setUserRole, setUserColleague, approveUser, rejectUser, adminSetPassword,
     getAgentExclusions, addAgentExclusion, deleteAgentExclusion,
     getLastChecks, sallySync, getSallyChecked, addSallyChecked, deleteSallyChecked,
     getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, getCheckSeries, notifyMentions,
