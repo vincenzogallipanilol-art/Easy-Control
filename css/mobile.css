@@ -1,0 +1,181 @@
+/* ================================================================
+   Easy Control — versione mobile / tablet
+   - menu come barra in basso (sotto i 992px)
+   - tabelle trasformate in schede (sotto i 768px); le etichette
+     arrivano da js/mobile.js (data-l)
+   ================================================================ */
+
+/* ── MENU: barra in basso ─────────────────────────────────────── */
+@media (max-width: 991.98px) {
+  .page-wrapper { padding-bottom: calc(84px + env(safe-area-inset-bottom)); }
+  .ec-sidebar { min-height: 0 !important; padding: 0 !important; }
+  .ec-sidebar > .container-fluid { flex-wrap: nowrap; justify-content: flex-start; padding: 0 !important; }
+  .ec-sidebar .navbar-toggler, .ec-side-divider { display: none !important; }
+  .ec-sidebar .ec-brand { padding: .55rem 1rem !important; }
+  .ec-logo { width: 34px; height: 34px; border-radius: 10px; }
+  .ec-logo svg { width: 20px; height: 20px; }
+  .ec-brand-name { font-size: 1.02rem; }
+
+  #navbar-menu {
+    display: flex !important; flex-direction: row; align-items: stretch;
+    position: fixed; left: 0; right: 0; bottom: 0; top: auto; z-index: 1040;
+    height: auto !important; flex-basis: auto; width: 100%;
+    background: linear-gradient(180deg, var(--ec-purple-1) 0%, var(--ec-purple-2) 100%);
+    padding: .3rem .35rem calc(.3rem + env(safe-area-inset-bottom));
+    box-shadow: 0 -6px 20px rgba(30, 20, 90, .28);
+    transition: transform .18s ease;
+  }
+  body.ec-kb #navbar-menu { transform: translateY(110%); }
+  #navbar-menu .navbar-nav { flex-direction: row; flex: 1 1 auto; justify-content: space-around; padding: 0 !important; gap: 0; margin: 0; }
+  #navbar-menu .nav-item { flex: 1 1 0; min-width: 0; }
+  #navbar-menu .mt-auto { margin: 0 !important; flex: 0 0 auto; display: flex; }
+  #navbar-menu .mt-auto .navbar-nav { flex: 0 0 auto; }
+  #navbar-menu .mt-auto .nav-item { flex: 0 0 auto; }
+  #navbar-menu .nav-link {
+    flex-direction: column; justify-content: center; align-items: center; gap: .12rem;
+    padding: .4rem .25rem !important; border-radius: 12px; min-height: 52px;
+  }
+  #navbar-menu .nav-link-icon svg { width: 22px !important; height: 22px !important; }
+  #navbar-menu .nav-link-icon { width: 22px; height: 22px; }
+  #navbar-menu .nav-link-title { font-size: .62rem; line-height: 1.1; font-weight: 600; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #navbar-menu .nav-link { min-width: 0 !important; width: 100%; }
+  #navbar-menu .mt-auto .nav-link { width: 52px; }
+  #navbar-menu .navbar-nav { min-width: 0; }
+  /* versione sopra il tasto Esci */
+  #navbar-menu .ec-version {
+    position: absolute; right: .55rem; top: -1.35rem; padding: .05rem .5rem; border-radius: 8px 8px 0 0;
+    background: var(--ec-purple-2); color: rgba(255, 255, 255, .8); font-size: .62rem;
+  }
+}
+
+/* ── INTESTAZIONE ─────────────────────────────────────────────── */
+@media (max-width: 767.98px) {
+  .page-header { padding-top: .6rem; }
+  .ec-greeting { font-size: 1.25rem; }
+  .ec-subtitle { font-size: .82rem; }
+  .page-header .col-auto { width: 100%; }
+  .page-header .col-auto > .d-flex { justify-content: space-between; }
+  .page-header .col-auto > .d-flex > * { flex: 0 0 auto; }
+  .ec-btn-label { display: none; }
+  .page-header .btn { min-width: 44px; min-height: 44px; display: inline-flex; align-items: center; justify-content: center; }
+  .page-header .btn svg { margin: 0 !important; }
+  .ec-user-meta, .ec-user-chip > svg { display: none; }
+  .ec-user-chip { margin-left: 0; padding-left: 0; border-left: 0; }
+  #notif-dropdown { width: calc(100vw - 24px) !important; }
+  .page-body { margin-top: .75rem; }
+  .ec-imp-banner { font-size: .8rem; padding: .4rem .75rem; }
+
+  /* iOS: sotto i 16px lo zoom automatico sui campi */
+  input:not([type=checkbox]):not([type=radio]), select, textarea,
+  .form-control, .form-select, .form-control-sm, .form-select-sm, .ec-note-input { font-size: 16px !important; }
+  .form-select-sm, .form-control-sm { min-height: 40px; }
+  .form-check-input { width: 1.3rem; height: 1.3rem; }
+  .btn-sm { min-height: 38px; padding-left: .8rem; padding-right: .8rem; }
+
+  .card { border-radius: 14px; }
+  .card-header { padding: .8rem 1rem; flex-wrap: wrap; gap: .5rem; }
+  .card-body { padding: 1rem; }
+  .card-options { margin-left: 0; flex-wrap: wrap; }
+  .modal-dialog { margin: .5rem; }
+  .modal-dialog-scrollable .modal-content { max-height: calc(100vh - 1rem); }
+
+  /* Dashboard */
+  .ec-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6rem; }
+  .ec-kpi { min-height: 96px; padding: .8rem .9rem; gap: .5rem; border-radius: 14px; }
+  .ec-kpi-value { font-size: 1.7rem; }
+  .ec-kpi-label { font-size: .74rem; }
+  .ec-seg { flex-wrap: wrap; }
+
+  /* Barra strumenti del piano / dei pool */
+  .ec-plan-toolbar { align-items: stretch; }
+  .ec-plan-toolbar > .ms-auto { margin-left: 0 !important; width: 100%; flex-wrap: wrap; gap: .5rem !important; }
+  .ec-plan-search, .ec-plan-toolbar .form-control { width: 100% !important; flex: 1 1 100%; }
+  .ec-bulk-bar { position: sticky; top: 0; z-index: 5; background: var(--ec-s1, #fff); }
+  .ec-bulk-bar .form-select { width: 100% !important; }
+  .ec-chips { gap: .3rem; }
+  .ec-chip { padding: .35rem .6rem; }
+
+  /* Tabelle → schede */
+  .ec-grid-wrap, .ec-grid-wrap--auto { max-height: none !important; overflow: visible !important; min-height: 0; }
+  .table-responsive:has(table.card-table:not(.ec-nostack)) { overflow: visible; font-size: .9rem; }
+
+  table.ec-grid:not(.ec-nostack), table.card-table:not(.ec-nostack) { display: block; width: 100%; white-space: normal; }
+  table.ec-grid:not(.ec-nostack) thead, table.card-table:not(.ec-nostack) thead { display: block; }
+  table.ec-grid:not(.ec-nostack) thead tr, table.card-table:not(.ec-nostack) thead tr { display: flex; padding: 0; }
+  table.ec-grid:not(.ec-nostack) thead th, table.card-table:not(.ec-nostack) thead th { display: none; position: static; }
+  /* resta solo la casella "seleziona tutte" */
+  table.ec-grid:not(.ec-nostack) thead th:has(input[type=checkbox]),
+  table.card-table:not(.ec-nostack) thead th:has(input[type=checkbox]) {
+    display: flex; align-items: center; gap: .5rem; padding: .6rem 1rem; width: 100%;
+    background: transparent; border: 0; text-transform: none; letter-spacing: 0; font-size: .85rem; color: var(--ec-muted);
+  }
+  table.ec-grid:not(.ec-nostack) thead th:has(input[type=checkbox])::after,
+  table.card-table:not(.ec-nostack) thead th:has(input[type=checkbox])::after { content: "Seleziona tutte"; }
+
+  table.ec-grid:not(.ec-nostack) tbody, table.card-table:not(.ec-nostack) tbody { display: block; }
+  table.ec-grid:not(.ec-nostack) tbody tr, table.card-table:not(.ec-nostack) tbody tr {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .25rem .9rem;
+    position: relative; padding: .75rem 1rem; margin: 0;
+    background: var(--ec-s1, #fff);
+    border-bottom: 8px solid var(--ec-bg);
+    border-left: 5px solid transparent;
+  }
+  table.ec-grid:not(.ec-nostack) tbody tr.has-st { border-left-color: var(--st); }
+  table.ec-grid:not(.ec-nostack) tbody tr.ec-sel, table.card-table:not(.ec-nostack) tbody tr.table-active { background: color-mix(in srgb, var(--ec-accent) 10%, var(--ec-s1, #fff)); }
+  table.ec-grid:not(.ec-nostack) tbody tr.is-called { background: color-mix(in srgb, #2fb344 12%, var(--ec-s1, #fff)); }
+  table.ec-grid:not(.ec-nostack) td, table.card-table:not(.ec-nostack) td {
+    display: block; position: static; min-width: 0 !important; max-width: none !important; width: auto !important;
+    padding: .1rem 0 !important; border: 0 !important; background: transparent !important; box-shadow: none !important;
+    white-space: normal; overflow: visible; text-overflow: clip; word-break: break-word;
+  }
+  table.ec-grid:not(.ec-nostack) td[data-l]::before, table.card-table:not(.ec-nostack) td[data-l]::before {
+    content: attr(data-l); display: block; margin-bottom: .05rem;
+    font-size: .62rem; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: #8a94a6;
+  }
+  table.ec-grid:not(.ec-nostack) td.ec-col-id, table.ec-grid:not(.ec-nostack) td.ec-col-status,
+  table.ec-grid:not(.ec-nostack) td.ec-col-note, table.ec-grid:not(.ec-nostack) td.ec-col-wrap,
+  table.card-table:not(.ec-nostack) td[colspan] { grid-column: 1 / -1; }
+  table.ec-grid:not(.ec-nostack) td.ec-col-id { order: -2; display: flex; align-items: center; gap: .6rem; flex-wrap: wrap; font-size: 1rem; }
+  table.ec-grid:not(.ec-nostack) td.ec-col-id[data-l]::before { display: none; }
+  table.ec-grid:not(.ec-nostack) td.ec-col-status { order: -1; margin-bottom: .2rem; }
+  table.ec-grid:not(.ec-nostack) td.ec-col-status[data-l]::before { display: none; }
+  table.ec-grid:not(.ec-nostack) .ec-status-select,
+  table.ec-grid:not(.ec-nostack) .ec-outcome-select { width: 100%; min-height: 44px; }
+  table.ec-grid:not(.ec-nostack) .ec-move { width: auto; min-width: 64px; min-height: 40px; margin-left: auto !important; }
+  table.ec-grid:not(.ec-nostack) .ec-note-input { border-color: #dce1e7; background: #fff; min-height: 44px; }
+  table.ec-grid:not(.ec-nostack) td.ec-col-note { background: transparent !important; }
+  .ec-src-note { max-width: none; padding: 0 0 .25rem; white-space: normal; }
+  .ec-called-badge, .ec-call-btn { min-height: 44px; }
+
+  /* Pool "Da assegnare": casella in alto a destra, assegnazione a tutta larghezza */
+  table.card-table .pool-row td.w-1 { position: absolute !important; top: .55rem; right: .8rem; width: auto !important; z-index: 1; }
+  table.card-table .pool-row td:first-child ~ td:nth-child(2) { padding-right: 2rem !important; }
+  table.card-table .pool-row td:last-child { grid-column: 1 / -1; }
+  table.card-table .pool-row select { width: 100% !important; min-height: 44px; }
+
+  /* Admin: righe con campi di modifica a tutta larghezza */
+  table.card-table:not(.ec-nostack) td select, table.card-table:not(.ec-nostack) td .form-control { width: 100% !important; }
+  table.card-table:not(.ec-nostack) td .btn { margin: .2rem .25rem .2rem 0 !important; }
+  table.card-table:not(.ec-nostack) tbody tr.ec-row-clickable { padding-right: 1rem; }
+  table.card-table:not(.ec-nostack) td:last-child:not([data-l]) { grid-column: 1 / -1; }
+
+  /* Badge "Controllata": va a capo invece di allargare la pagina */
+  .ec-checked-badge { white-space: normal; display: inline-flex; flex-wrap: wrap; align-items: center; gap: .15rem .4rem; max-width: 100%; }
+  .ec-checked-badge small { white-space: normal; }
+
+  /* Chat */
+  .ec-chat-messages { height: 55vh; }
+}
+
+/* ── tema scuro ───────────────────────────────────────────────── */
+@media (max-width: 767.98px) {
+  html[data-bs-theme="dark"] table.ec-grid:not(.ec-nostack) tbody tr,
+  html[data-bs-theme="dark"] table.card-table:not(.ec-nostack) tbody tr { background: var(--ec-s1); border-bottom-color: var(--ec-bg); }
+  html[data-bs-theme="dark"] table.ec-grid:not(.ec-nostack) .ec-note-input { background: var(--ec-s2); border-color: var(--ec-ln); }
+}
+
+@media (max-width: 400px) {
+  #navbar-menu { padding-left: .1rem; padding-right: .1rem; }
+  #navbar-menu .nav-link-title { font-size: .55rem; letter-spacing: -.01em; }
+  #navbar-menu .mt-auto .nav-link { width: 44px; }
+}
