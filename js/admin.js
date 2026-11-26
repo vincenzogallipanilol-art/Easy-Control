@@ -514,6 +514,7 @@ const Admin = (() => {
         </td>
         <td class="text-nowrap">
           ${u.id !== (Auth.getRealProfile()?.id) ? `<button class="btn btn-sm btn-outline-warning me-1" title="Entra come questo utente" onclick="Admin.impersonate('${u.id}')">Impersonifica</button>` : ''}
+          <button class="btn btn-sm btn-outline-secondary me-1" title="Imposta una nuova password per questo utente" onclick="Admin.setUserPassword('${u.id}')">Password</button>
           <button class="btn btn-sm btn-ghost-secondary" title="Rimetti in attesa" onclick="Admin.rejectUser('${u.id}')">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           </button>
@@ -529,6 +530,20 @@ const Admin = (() => {
       UI.toast('Ruolo aggiornato', 'success');
     } catch(e) {
       UI.toast('Errore: ' + e.message, 'danger');
+    }
+  }
+
+  async function setUserPassword(userId) {
+    const u = _users.find(x => x.id === userId);
+    if (!u) return;
+    const pw = window.prompt(`Nuova password per ${u.email} (minimo 6 caratteri):`);
+    if (pw === null) return;
+    if (pw.length < 6) { UI.toast('La password deve avere almeno 6 caratteri', 'warning'); return; }
+    try {
+      await DB.adminSetPassword(userId, pw);
+      UI.toast('Password impostata: comunicala all\'utente', 'success');
+    } catch (e) {
+      UI.toast(/admin_set_password|function/i.test(e.message) ? 'Funzione SQL mancante: esegui lo script in Supabase' : 'Errore: ' + e.message, 'danger');
     }
   }
 
@@ -813,7 +828,7 @@ const Admin = (() => {
     addModalExcludedAgent, removeModalExcludedAgent,
     saveWorkingDays, renderWorkingDays, saveVerifica, resetVerifica,
     addModalSally, removeModalSally, setModalSallyOnly,
-    setUserRole, setUserColleague, approveUser, rejectUser,
+    setUserRole, setUserColleague, setUserPassword, approveUser, rejectUser,
     impersonate: id => Auth.impersonate(id),
     sallyAnalyze, sallyApply, sallyCancel,
     sallyRegSync, sallyRegAdd, sallyRegRemove, sallyRegRender,
