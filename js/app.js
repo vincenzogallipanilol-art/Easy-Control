@@ -1122,8 +1122,7 @@
   const PLAN_COLS = [
     ['cognome', 'Cognome'], ['nome', 'Nome'], ['__note', 'Note'],
     ['tipologia', 'Tipologia'], ['istituto_finanziario', 'Istituto Finanziario'],
-    ['agente_attuale', 'Agente Attuale'], ['area_manager', 'Area Manager'],
-    ['group_manager', 'Group Manager'], ['team_manager', 'Team Manager'],
+    ['agente_attuale', 'Agente Attuale'],
     ['stato_attuale', 'Stato Attuale'], ['conformita_documentazione', 'Conformità'],
     ['originale_archiviato', 'Originale Archiviato'],
   ];
