@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.36.1', date: '2026-11-26', items: [
+    'Piani di lavoro: tolte le colonne Area Manager, Group Manager e Team Manager.',
+  ] },
   { v: '1.36.0', date: '2026-11-26', items: [
     'Utenti (admin): nuovo pulsante "Password" per impostare direttamente la password di un utente e farlo accedere.',
   ] },
