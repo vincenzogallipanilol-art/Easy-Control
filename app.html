@@ -12,8 +12,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"/>
-  <link rel="stylesheet" href="css/app.css?v=1.36.1"/>
-  <script src="js/theme.js?v=1.36.1"></script>
+  <link rel="stylesheet" href="css/app.css?v=1.37.0"/>
+  <link rel="stylesheet" href="css/mobile.css?v=1.37.0"/>
+  <script src="js/theme.js?v=1.37.0"></script>
 </head>
 <body class="antialiased">
 
@@ -158,7 +159,7 @@
               <div data-admin-only>
                 <button class="btn btn-outline-secondary" id="btn-upload-report">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-                  Carica report
+                  <span class="ec-btn-label">Carica report</span>
                 </button>
                 <input type="file" id="input-report-file" accept=".csv,.xlsx,.xls" style="display:none"/>
               </div>
@@ -166,13 +167,13 @@
               <div data-admin-only>
                 <button class="btn btn-primary" id="btn-ricalcola">
                   <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                  Ricalcola
+                  <span class="ec-btn-label">Ricalcola</span>
                 </button>
               </div>
               <!-- Export -->
               <button class="btn btn-outline-secondary" id="btn-export">
                 <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="me-1"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                Esporta
+                <span class="ec-btn-label">Esporta</span>
               </button>
               <!-- Utente -->
               <div class="dropdown">
@@ -389,9 +390,9 @@
             <div class="card-header"><h3 class="card-title">Utenti</h3></div>
             <div class="table-responsive">
               <table class="table table-vcenter card-table">
-                <thead><tr><th>Email</th><th>Nome</th><th>Ruolo</th><th>Collega</th><th></th></tr></thead>
+                <thead><tr><th>Email</th><th>Nome</th><th>Ruolo</th><th>Cambia ruolo</th><th>Collega</th><th></th></tr></thead>
                 <tbody id="admin-users-tbody">
-                  <tr><td colspan="5" class="text-center text-muted py-3">Caricamento…</td></tr>
+                  <tr><td colspan="6" class="text-center text-muted py-3">Caricamento…</td></tr>
                 </tbody>
               </table>
             </div>
@@ -476,7 +477,7 @@
         <label class="form-label mb-1">Filtri stato di questo collega</label>
         <div class="mb-2"><small class="text-muted">○ = vuoto &nbsp; ● = compilato &nbsp; — = qualsiasi &nbsp;·&nbsp; clicca per cambiare</small></div>
         <div class="table-responsive" style="max-height:260px">
-          <table class="table table-sm table-vcenter card-table mb-0">
+          <table class="table table-sm table-vcenter card-table ec-nostack mb-0">
             <thead>
               <tr><th>Stato</th><th>Includi</th><th title="Note">Note</th><th title="Conformità">Conf.</th></tr>
             </thead>
@@ -529,22 +530,23 @@
 <!-- ── SCRIPTS ──────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/config.js?v=1.36.1"></script>
-<script src="js/supabase-client.js?v=1.36.1"></script>
-<script src="js/auth.js?v=1.36.1"></script>
-<script src="js/cache.js?v=1.36.1"></script>
-<script src="js/db.js?v=1.36.1"></script>
-<script src="js/engine.js?v=1.36.1"></script>
-<script src="js/realtime.js?v=1.36.1"></script>
-<script src="js/colfilter.js?v=1.36.1"></script>
-<script src="js/version.js?v=1.36.1"></script>
-<script src="js/changelog.js?v=1.36.1"></script>
-<script src="js/updates.js?v=1.36.1"></script>
-<script src="js/focus.js?v=1.36.1"></script>
-<script src="js/ui.js?v=1.36.1"></script>
-<script src="js/modelli.js?v=1.36.1"></script>
-<script src="js/admin.js?v=1.36.1"></script>
-<script src="js/app.js?v=1.36.1"></script>
+<script src="js/config.js?v=1.37.0"></script>
+<script src="js/supabase-client.js?v=1.37.0"></script>
+<script src="js/auth.js?v=1.37.0"></script>
+<script src="js/cache.js?v=1.37.0"></script>
+<script src="js/db.js?v=1.37.0"></script>
+<script src="js/engine.js?v=1.37.0"></script>
+<script src="js/realtime.js?v=1.37.0"></script>
+<script src="js/colfilter.js?v=1.37.0"></script>
+<script src="js/version.js?v=1.37.0"></script>
+<script src="js/changelog.js?v=1.37.0"></script>
+<script src="js/updates.js?v=1.37.0"></script>
+<script src="js/focus.js?v=1.37.0"></script>
+<script src="js/ui.js?v=1.37.0"></script>
+<script src="js/modelli.js?v=1.37.0"></script>
+<script src="js/admin.js?v=1.37.0"></script>
+<script src="js/app.js?v=1.37.0"></script>
+<script src="js/mobile.js?v=1.37.0"></script>
 
 </body>
 </html>
