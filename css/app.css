@@ -914,3 +914,12 @@ html[data-bs-theme="dark"] .ec-watch-agent, html[data-bs-theme="dark"] .ec-watch
 html[data-bs-theme="dark"] .ec-uc-av { background: hsl(var(--uh) 45% 30%) !important; color: hsl(var(--uh) 80% 88%) !important; }
 html[data-bs-theme="dark"] .ec-uc-bubble { background: hsl(var(--uh) 32% 22%); border-left-color: hsl(var(--uh) 55% 55%); color: var(--ec-ink); }
 html[data-bs-theme="dark"] .ec-uc-name { color: hsl(var(--uh) 75% 74%); }
+
+/* ── NOTE CHIAMATE: punti smarcabili e data modifica ─────────── */
+.ec-pt { display: flex; align-items: flex-start; gap: .4rem; margin: 0 0 .2rem; white-space: normal; cursor: pointer; font-weight: 400; }
+.ec-pt input { margin-top: .2rem; flex-shrink: 0; }
+.ec-pt.is-done span { text-decoration: line-through; opacity: .55; }
+.ec-pt-foot { font-size: .72rem; margin-top: .15rem; }
+.ec-pt-foot small { display: block; margin: 0 !important; line-height: 1.2; }
+.ec-note-stamp { font-size: .7rem; line-height: 1.2; margin-top: .15rem; white-space: normal; }
+.ec-calls-tbl td.ec-calls-note { white-space: normal; overflow: visible; }
