@@ -1994,7 +1994,7 @@
   // Righe di una scheda del pool, in forma uniforme per filtri e tabelle
   function poolItems(tab) {
     if (tab === 'assign') {
-      const { unassigned, regularPool, sallyPool } = poolSplit();
+      const { unassigned, sallyPool } = poolSplit();
       const sallyIds = new Set(sallyPool.map(p => p.id));
       const { poolPractices } = runEngine(manualAssignments());
       const reason = {};
@@ -2659,11 +2659,6 @@
     }
     const box = $('chat-messages');
     if (box) box.scrollTop = (opts.bottom || atBottom) ? box.scrollHeight : keepTop;
-  }
-
-  function scrollChatToBottom() {
-    const box = $('chat-messages');
-    if (box) box.scrollTop = box.scrollHeight;
   }
 
   async function sendChat() {
