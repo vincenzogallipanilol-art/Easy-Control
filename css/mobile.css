@@ -179,3 +179,9 @@
   #navbar-menu .nav-link-title { font-size: .55rem; letter-spacing: -.01em; }
   #navbar-menu .mt-auto .nav-link { width: 44px; }
 }
+
+/* Chiamate: lo stato lungo va a capo invece di uscire dalla card */
+@media (max-width: 767.98px) {
+  .ec-calls-card td .badge { white-space: normal; max-width: 100%; text-align: left; }
+  .ec-calls-card .ec-called-badge { max-width: 100%; white-space: normal; }
+}
