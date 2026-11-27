@@ -1,5 +1,11 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.41.0', date: '2026-11-28', items: [
+    'Chiamate: le Note della pratica sono a punti (uno per riga) con una casella per ciascuno: chi ha fatto una singola integrazione spunta quel punto, che resta barrato. Con "Modifica" si può cambiare il testo; sotto compare la data (e chi) dell\'ultima modifica, anche per le Note chiamata.',
+    'Pool Audit / xFlat / Help: quando un Top usa "Integra", la pratica torna nel piano di chi l\'aveva segnalata come pratica da controllare (con l\'esito e la nota del Top), non più con lo stato già applicato.',
+    'Dashboard: tolti i riquadri "Agenti Sally (agganciati)" e "Agenti Sally (pool)".',
+    'Serve la migration 20261129000000_call_notes.sql.',
+  ] },
   { v: '1.40.0', date: '2026-11-28', items: [
     'Chiamate: colonne fisse (Pratica ID, Cognome, Nome, Tipologia, Istituto, Stato, Segnalata da, Note, Chiamato, Note chiamata, Esito). Tutti possono segnare "Chiamato" (si vede chi e quando), scrivere le note della chiamata e dare l\'esito Conforme / Richiesta integrazioni, che fa uscire la pratica dall\'elenco.',
     'Chiamate: accanto al nome di ogni agente il pulsante "Segna chiamato tutte" segna come chiamate tutte le sue pratiche.',
