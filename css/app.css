@@ -907,13 +907,13 @@ html[data-bs-theme="dark"] .ec-watch-agent, html[data-bs-theme="dark"] .ec-watch
 .ec-calls-tbl .ec-called-badge { flex-direction: column; align-items: flex-start; gap: 0; border-radius: .6rem; white-space: normal; }
 .ec-calls-tbl .ec-called-badge small { display: block; }
 
-/* ── CHAT: un colore per ogni utente (tinta in --uh) ─────────── */
-.ec-uc-av { background: hsl(var(--uh) 70% 86%) !important; color: hsl(var(--uh) 62% 26%) !important; }
-.ec-uc-bubble { background: hsl(var(--uh) 80% 94%); border-left: 3px solid hsl(var(--uh) 62% 55%); }
-.ec-uc-name { color: hsl(var(--uh) 65% 34%); }
-html[data-bs-theme="dark"] .ec-uc-av { background: hsl(var(--uh) 45% 30%) !important; color: hsl(var(--uh) 80% 88%) !important; }
-html[data-bs-theme="dark"] .ec-uc-bubble { background: hsl(var(--uh) 32% 22%); border-left-color: hsl(var(--uh) 55% 55%); color: var(--ec-ink); }
-html[data-bs-theme="dark"] .ec-uc-name { color: hsl(var(--uh) 75% 74%); }
+/* ── CHAT: colore di ogni utente = colore del collega (--uc) ─────────── */
+.ec-uc-av { background: color-mix(in srgb, var(--uc) 22%, #fff) !important; color: color-mix(in srgb, var(--uc) 60%, #000) !important; }
+.ec-uc-bubble { background: color-mix(in srgb, var(--uc) 12%, #fff); border-left: 3px solid var(--uc); }
+.ec-uc-name { color: color-mix(in srgb, var(--uc) 70%, #000); }
+html[data-bs-theme="dark"] .ec-uc-av { background: color-mix(in srgb, var(--uc) 35%, #1b2231) !important; color: color-mix(in srgb, var(--uc) 40%, #fff) !important; }
+html[data-bs-theme="dark"] .ec-uc-bubble { background: color-mix(in srgb, var(--uc) 22%, #1b2231); border-left-color: var(--uc); color: var(--ec-ink); }
+html[data-bs-theme="dark"] .ec-uc-name { color: color-mix(in srgb, var(--uc) 55%, #fff); }
 
 /* ── NOTE CHIAMATE: punti smarcabili e data modifica ─────────── */
 .ec-pt { display: flex; align-items: flex-start; gap: .4rem; margin: 0 0 .2rem; white-space: normal; cursor: pointer; font-weight: 400; }
