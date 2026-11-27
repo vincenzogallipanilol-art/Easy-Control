@@ -272,7 +272,7 @@ const Admin = (() => {
       if (res && res.partial && _modalExcluded.length) {
         UI.toast('Collega salvato, ma gli agenti esclusi richiedono la migration SQL del piano di lavoro', 'warning');
       } else {
-        UI.toast('Collega salvato', 'success');
+        UI.toast('Collega salvato. Filtri e tipologie valgono per le nuove assegnazioni: per applicarli ai piani già assegnati premi Ricalcola', 'success');
       }
     } catch(e) {
       UI.toast('Errore: ' + e.message, 'danger');
