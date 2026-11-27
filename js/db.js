@@ -108,12 +108,6 @@ const DB = (() => {
   }
 
   // ── REPORTS ──────────────────────────────────────── */
-  async function getReports() {
-    const { data, error } = await db.from('daily_reports')
-      .select('*').order('uploaded_at', { ascending: false });
-    if (error) throw error;
-    return data;
-  }
   async function getActiveReport() {
     const { data, error } = await db.from('daily_reports')
       .select('*').eq('active', true).maybeSingle();
@@ -255,16 +249,6 @@ const DB = (() => {
       const { error } = await db.from('sally_checked').delete().in('pratica_id', ids.slice(i, i + 200));
       if (error) throw error;
     }
-  }
-  async function addAgentExclusion(agentName) {
-    const { data, error } = await db.from('agent_exclusions')
-      .insert({ agent_name: agentName }).select().single();
-    if (error) throw error;
-    return data;
-  }
-  async function deleteAgentExclusion(id) {
-    const { error } = await db.from('agent_exclusions').delete().eq('id', id);
-    if (error) throw error;
   }
 
   // ── VALORI DISTINTI dal report attivo (per il modal collega) ──────
@@ -436,11 +420,6 @@ const DB = (() => {
     const { error } = await db.from('notifications').update({ read: true }).eq('id', id);
     if (error) throw error;
   }
-  async function markAllNotificationsRead(ids) {
-    if (!ids || !ids.length) return;
-    const { error } = await db.from('notifications').update({ read: true }).in('id', ids);
-    if (error) throw error;
-  }
 
   // ── CHAT (stanza unica) ───────────────────────────────── */
   async function getChatMessages() {
@@ -475,17 +454,17 @@ const DB = (() => {
     getConfig, setConfig,
     getStateFilters, upsertStateFilter,
     getColleagues, upsertColleague, deleteColleague,
-    getReports, getActiveReport, createReport,
+    getActiveReport, createReport,
     insertPractices, getPractices,
     getAssignments, getPoolCandidates, claimPractices, upsertAssignment, bulkUpsertAssignments, deleteAssignmentsByPractice, moveWork, deleteAutoAssignments,
     getDistinctTipologie, getDistinctAgenti,
     getAllColleagueStateFilters, getColleagueStateFilters, saveColleagueStateFilters,
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser, adminSetPassword,
-    getAgentExclusions, addAgentExclusion, deleteAgentExclusion,
+    getAgentExclusions,
     getLastChecks, sallySync, getSallyChecked, addSallyChecked, deleteSallyChecked,
     getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, getCheckSeries, notifyMentions,
     isMissingSchema,
-    getNotifications, markNotificationRead, markAllNotificationsRead,
+    getNotifications, markNotificationRead,
     getChatMessages, sendChatMessage, getChatReads, markChatRead,
   };
 })();
