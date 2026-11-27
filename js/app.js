@@ -78,7 +78,7 @@
   let series            = null;   // righe check_series(): null = migration non eseguita
   let seriesDays        = 7;
   let seriesMode        = 'user'; // 'user' | 'status'
-  let poolTab           = 'assign';   // assign | da_chiamare | audit | xflat | help
+  let poolTab           = 'assign';   // assign | audit | xflat | help
   const poolFilter      = { q: '', st: '', tip: '', ag: '' };
   const planFilter      = {};  // colleague_id -> { q, st }
   let _poolShowAll      = false;
@@ -230,9 +230,10 @@
   const navLinks = document.querySelectorAll('[data-nav]');
   const sections = document.querySelectorAll('[data-section]');
 
-  const POOL_TABS = ['assign', 'da_chiamare', 'audit', 'xflat', 'help'];
+  const POOL_TABS = ['assign', 'audit', 'xflat', 'help'];
   function navigate(target, arg, push = false) {
     if (target === 'gestione') { target = 'pool'; arg = arg || 'audit'; }   // vecchi link
+    if (target === 'pool' && arg === 'da_chiamare') { target = 'chiamate'; arg = null; }   // il vecchio pool Da chiamare ora e' il menu Chiamate
     if (!ALL_TARGETS.includes(target) || !isTargetAllowed(target)) target = defaultTarget();
     if (target === 'scheda') {
       if (arg) schedaColleagueId = arg;
@@ -763,7 +764,6 @@
   const iconDoc   = () => svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>');
   const iconCheck = () => svg('<polyline points="20 6 9 17 4 12"/>');
   const iconPool  = () => svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>');
-  const iconCal   = () => svg('<rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>');
   const iconExcl  = () => svg('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>');
   const iconEye   = () => svg('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>');
   const iconPhone = () => svg('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>');
@@ -836,7 +836,6 @@
           ${UI.kpiTile('Controllate oggi',  fmt(checkedToday),       iconEye(),   'teal')}
           ${kpi.sallyHooked ? UI.kpiTile('Agenti Sally (agganciati)', fmt(kpi.sallyHooked), iconExcl(), 'cyan') : ''}
           ${sallyPool.length ? UI.kpiTile('Agenti Sally (pool)', fmt(sallyPool.length), iconExcl(), 'red', '', "App.goPool('assign')") : ''}
-          ${UI.kpiTile('Giorni lavorativi', config.working_days || 1, iconCal(),  'purple')}
         </div>`;
     }
 
@@ -911,7 +910,7 @@
     UI.mountLineCharts(el);
   }
   const goMine = () => navigate('mine', null, true);
-  const goPool = tab => navigate('pool', tab, true);
+  const goPool = tab => (tab === 'da_chiamare' ? navigate('chiamate', null, true) : navigate('pool', tab, true));
 
   // Colleghi visibili in dashboard: tutti per Admin/Top, solo il proprio per un utente semplice
   const visibleColleagues = () => colleagues.filter(c => c.active && (canSeeAll || c.id === myColleagueId));
@@ -1218,7 +1217,7 @@
   // Pool "Da chiamare": pulsante Chiamato (con orario) ed esito diretto
   const callTime = iso => { if (!iso) return ''; const d = new Date(iso); return d.toLocaleDateString('it-IT', { day: '2-digit', month: '2-digit' }) + ' ' + d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' }); };
   const calledCell = (w, dis) => w.called
-    ? `<button type="button" class="ec-called-badge" data-fkey="called:${esc(w.pratica_id)}" onclick="App.setCalled(this)" ${dis} title="Chiamata fatta: clicca per annullare">&#10003; Chiamato<small>${esc(callTime(w.called_at))}</small></button>`
+    ? `<button type="button" class="ec-called-badge" data-fkey="called:${esc(w.pratica_id)}" onclick="App.setCalled(this)" ${dis} title="Chiamata fatta${w.called_by ? ' da ' + esc(userName(w.called_by)) : ''}: clicca per annullare">&#10003; Chiamato<small>${esc((w.called_by ? userName(w.called_by) + ' · ' : '') + callTime(w.called_at))}</small></button>`
     : `<button type="button" class="ec-call-btn" data-fkey="called:${esc(w.pratica_id)}" onclick="App.setCalled(this)" ${dis} title="Segna che hai chiamato">Segna chiamato</button>`;
   const outcomeCell = (w, dis) => `
     <select class="form-select form-select-sm ec-outcome-select" data-fkey="out:${esc(w.pratica_id)}" aria-label="Esito pratica ${esc(w.pratica_id)}"
@@ -1770,7 +1769,24 @@
     const pid = btn.closest('tr').dataset.pid;
     const called = !work[pid]?.called;
     btn.disabled = true;
-    await updatePoolRow(pid, { called, called_at: called ? new Date().toISOString() : null });
+    await updatePoolRow(pid, { called, called_at: called ? new Date().toISOString() : null, called_by: called ? session.user.id : null });
+    softRender();
+  }
+  // Chiamate: segna come chiamate tutte le pratiche ancora da chiamare di un agente
+  async function callAgentAll(btn) {
+    const ag = btn.dataset.agent;
+    const pids = Object.values(work)
+      .filter(w => workState(w.pratica_id).phase === 'call' && !w.called && callAgent(w) === ag)
+      .map(w => w.pratica_id);
+    if (!pids.length) return;
+    if (!UI.confirm(`Segnare come chiamate le ${pids.length} pratiche di ${ag}?`)) return;
+    btn.disabled = true;
+    try {
+      const rows = await DB.updateWorkMany(pids, { called: true, called_at: new Date().toISOString(), called_by: session.user.id });
+      for (const r of rows) work[r.pratica_id] = r;
+      if (rows.length < pids.length) UI.toast(`${rows.length} pratiche su ${pids.length} segnate come chiamate`, 'warning');
+      else UI.toast(`${rows.length} pratiche di ${ag} segnate come chiamate`, 'success');
+    } catch (e) { UI.toast('Errore salvataggio: ' + e.message, 'danger'); }
     softRender();
   }
   // Esito diretto dal pool "Da chiamare": il cliente ha integrato -> Conforme / Richiesta integrazioni
@@ -1981,12 +1997,12 @@
     other:              'Altro',
   };
 
-  const POOL_LABELS = { assign: 'Da assegnare', da_chiamare: 'Da chiamare', audit: 'Audit', xflat: 'xFlat', help: 'Help' };
+  const POOL_LABELS = { assign: 'Da assegnare', audit: 'Audit', xflat: 'xFlat', help: 'Help' };
   const poolHex = k => (UI.WORK_STATUSES[k] || {}).hex || '#206bc4';
 
   function mgmtRows(status) {
     return Object.values(work)
-      .filter(w => w.status === status && workState(w.pratica_id).phase === (status === 'da_chiamare' ? 'call' : 'mgmt'))
+      .filter(w => w.status === status && workState(w.pratica_id).phase === 'mgmt')
       .sort((a, b) => new Date(a.set_at) - new Date(b.set_at));
   }
   const colName = id => colleagues.find(c => c.id === id)?.name || '';
@@ -2128,7 +2144,7 @@
     if (!activeReport) { el.innerHTML = UI.emptyState(svg('<circle cx="12" cy="12" r="10"/>', 40), 'Nessun report attivo'); return; }
 
     const counts = { assign: poolSplit().unassigned.length };
-    for (const k of ['da_chiamare', ...UI.MGMT_STATUSES]) counts[k] = mgmtRows(k).length;
+    for (const k of UI.MGMT_STATUSES) counts[k] = mgmtRows(k).length;
     const tabs = POOL_TABS.map(k => `
       <button type="button" class="ec-chip ${k === poolTab ? 'is-active' : ''}" onclick="App.goPool('${k}')" aria-pressed="${k === poolTab}">
         <span class="ec-st-dot" style="background:${poolHex(k)}"></span>${POOL_LABELS[k]} <strong>${fmt(counts[k])}</strong>
@@ -2236,38 +2252,28 @@
         ${_poolShowAll ? '' : poolShowMore(sally.length, Math.min(PAGE, sally.length))}` : ''}`;
   }
 
-  // Schede "Da chiamare" / Audit / xFlat / Help (righe di practice_work)
+  // Schede Audit / xFlat / Help (righe di practice_work)
   function poolWorkHtml(rows) {
     const PAGE = 200;
-    const calls = poolTab === 'da_chiamare';
     const shown = _poolShowAll ? rows : rows.slice(0, PAGE);
     return `
-      ${calls ? callBarHtml() : ''}
       <div class="ec-grid-wrap ec-grid-wrap--auto">
         <table class="ec-grid ec-grid--pool">
           <thead><tr>
             ${pth('pid', 'Pratica')}${pth('cognome', 'Cognome')}${pth('nome', 'Nome')}<th>Note</th>${pth('tipologia', 'Tipologia')}${pth('istituto', 'Istituto Finanziario')}
-            ${pth('agente', 'Agente Attuale')}${pth('stato', 'Stato Attuale')}${pth('operatore', calls ? 'Operatore' : 'Inviata da')}${pth('segnalata', 'Segnalata')}
-            ${calls ? '<th>Chiamato</th><th>Note chiamata</th><th>Esito</th>' : '<th>Note gestione</th><th></th>'}
+            ${pth('agente', 'Agente Attuale')}${pth('stato', 'Stato Attuale')}${pth('operatore', 'Inviata da')}${pth('segnalata', 'Segnalata')}
+            <th>Note gestione</th><th></th>
           </tr></thead>
           <tbody>
             ${shown.map(({ w, stato }) => `
-              <tr data-pid="${esc(w.pratica_id)}" class="${calls && w.called ? 'is-called' : ''}${calls && callSel.has(w.pratica_id) ? ' ec-sel' : ''}">
-                <td class="ec-col-id">${calls ? callChk(w.pratica_id) : ''}${UI.praticaLink(w.pratica_id)}</td>
+              <tr data-pid="${esc(w.pratica_id)}">
+                <td class="ec-col-id">${UI.praticaLink(w.pratica_id)}</td>
                 ${cell(w.cognome)}${cell(w.nome)}
                 <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
                 ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${agentCell(w.agente_attuale)}
                 <td>${UI.statoBadge(esc(stato))}</td>
                 ${senderCell(w)}
                 <td>${new Date(w.set_at).toLocaleDateString('it-IT')}</td>
-                ${calls ? `
-                <td>${calledCell(w, '')}</td>
-                <td class="ec-col-note">
-                  <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
-                    value="${esc(w.pool_note || '')}" placeholder="Esito della chiamata…" maxlength="1000" autocomplete="off"
-                    aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
-                </td>
-                <td>${outcomeCell(w, '')}</td>` : `
                 <td class="ec-col-note">
                   <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
                     value="${esc(w.pool_note || '')}" placeholder="Esito / azioni…" maxlength="1000" autocomplete="off"
@@ -2276,7 +2282,7 @@
                 <td class="text-nowrap">
                   <button type="button" class="btn btn-sm btn-primary" onclick="App.openIntegra(this)" title="Segna come gestita e rimanda la pratica a chi l'ha inviata">Integra</button>
                   <button type="button" class="btn btn-sm btn-outline-secondary ms-1" onclick="App.closePoolRow(this)" title="Rimuovi dal pool senza rimandarla">Chiudi</button>
-                </td>`}
+                </td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -2580,6 +2586,12 @@
   }
 
   const chatName = u => (u && (u.full_name || u.email)) || '—';
+  // Colore assegnato a ogni utente (stabile, tinte ben distanziate): avatar, nome e fumetto
+  function userHue(id) {
+    const ids = [...new Set([...users.map(u => u.id), session.user.id])].sort();
+    return Math.round((Math.max(0, ids.indexOf(id)) * 137.508 + 212) % 360);
+  }
+  const ucStyle = id => `style="--uh:${userHue(id)}"`;
   function renderChat(opts = {}) {
     const el = $('chat-content');
     if (!el) return;
@@ -2609,7 +2621,7 @@
       </button>`;
     const groupAvatar = '<span class="avatar avatar-sm bg-azure-lt"><svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></span>';
     const convs = item('group', 'Tutto il gruppo', groupAvatar, true)
-      + people.map(u => item(u.id, chatName(u), `<span class="avatar avatar-sm bg-blue-lt">${esc(UI.initialsAvatar(chatName(u)))}</span>`, false)).join('');
+      + people.map(u => item(u.id, chatName(u), `<span class="avatar avatar-sm ec-uc-av" ${ucStyle(u.id)}>${esc(UI.initialsAvatar(chatName(u)))}</span>`, false)).join('');
 
     const peer = chatConv === 'group' ? null : users.find(u => u.id === chatConv);
     const title = chatConv === 'group' ? 'Tutto il gruppo' : chatName(peer);
@@ -2619,9 +2631,9 @@
       const showAuthor = !mine && chatConv === 'group';
       return `
       <div class="ec-chat-row ${mine ? 'ec-chat-row--mine' : ''}">
-        ${showAuthor ? `<span class="avatar avatar-xs bg-blue-lt ec-chat-avatar">${esc(UI.initialsAvatar(chatName(m.author)))}</span>` : ''}
-        <div class="ec-chat-bubble ${mine ? 'ec-chat-bubble--mine' : ''}">
-          ${showAuthor ? `<div class="ec-chat-author">${esc(chatName(m.author))}</div>` : ''}
+        ${showAuthor ? `<span class="avatar avatar-xs ec-uc-av ec-chat-avatar" ${ucStyle(m.author_id)}>${esc(UI.initialsAvatar(chatName(m.author)))}</span>` : ''}
+        <div class="ec-chat-bubble ec-uc-bubble ${mine ? 'ec-chat-bubble--mine' : ''}" ${ucStyle(m.author_id)}>
+          ${showAuthor ? `<div class="ec-chat-author ec-uc-name">${esc(chatName(m.author))}</div>` : ''}
           <div class="ec-chat-body">${esc(m.body)}</div>
           <div class="ec-chat-time">${UI.timeAgo(m.created_at)}</div>
         </div>
@@ -2742,38 +2754,54 @@
   const callsFilter = { q: '', ag: '' };
   const byIt = (a, b) => String(a).localeCompare(String(b), 'it');
   const agentLabel = a => String(a || '').trim() || 'Senza agente';
+  const callAgent = w => agentLabel(w.agente_attuale || (practiceByPid[w.pratica_id] || {}).agente_attuale);
+  // Colonne fisse della tabella Chiamate [titolo, larghezza px]
+  const CALL_COLS = [['Pratica ID', 112], ['Cognome', 120], ['Nome', 110], ['Tipologia', 130], ['Istituto Finanziario', 150], ['Stato Attuale', 150],
+    ['Segnalata da', 130], ['Note', 200], ['Chiamato', 200], ['Note chiamata', 220], ['Esito', 170]];
   function renderCalls() {
     const el = $('chiamate-content');
     if (!el) return;
     if (!dataLoaded) { el.innerHTML = spinner; return; }
     const all = Object.values(work).filter(w => workState(w.pratica_id).phase === 'call')
-      .map(w => { const p = practiceByPid[w.pratica_id] || {}; return { w, ag: agentLabel(w.agente_attuale || p.agente_attuale), stato: p.stato_attuale || '' }; });
+      .map(w => { const p = practiceByPid[w.pratica_id] || {}; return { w, ag: callAgent(w), stato: p.stato_attuale || '' }; });
     const agents = [...new Set(all.map(r => r.ag))].sort(byIt);
     const q = callsFilter.q.toLowerCase().trim();
     const rows = all.filter(r => (!callsFilter.ag || r.ag === callsFilter.ag) &&
       (!q || [r.w.pratica_id, r.w.cognome, r.w.nome, r.ag, r.w.tipologia].join(' ').toLowerCase().includes(q)));
     const groups = new Map();
     for (const r of rows) { if (!groups.has(r.ag)) groups.set(r.ag, []); groups.get(r.ag).push(r); }
+    const totalW = CALL_COLS.reduce((n, c) => n + c[1], 0);
+    const colgroup = `<colgroup>${CALL_COLS.map(c => `<col style="width:${c[1]}px"/>`).join('')}</colgroup>`;
+    const thead = `<thead><tr>${CALL_COLS.map(c => `<th>${c[0]}</th>`).join('')}</tr></thead>`;
+    const by = w => (users.some(u => u.id === w.set_by) ? userName(w.set_by) : colName(w.colleague_id)) || '';
     const cards = [...groups.keys()].sort(byIt).map(ag => {
       const list = groups.get(ag).sort((a, b) => byIt(a.w.cognome || '', b.w.cognome || '') || byIt(a.w.nome || '', b.w.nome || ''));
       const wa = watchFor(ag === 'Senza agente' ? '' : ag);
+      const todo = list.filter(r => !r.w.called).length;
       return `
         <div class="card mb-3 ec-calls-card">
           <div class="card-header">
             <h3 class="card-title">${wa ? `<span class="ec-watch-agent" title="${esc(watchTip(wa))}">&#9888; ${esc(ag)}</span>` : esc(ag)} — ${fmt(list.length)}</h3>
+            <button type="button" class="ec-call-btn ms-3" data-agent="${esc(ag)}" onclick="App.callAgentAll(this)" ${todo ? '' : 'disabled'}
+              title="Segna come chiamate tutte le pratiche di questo agente">${todo ? `Segna chiamato tutte (${fmt(todo)})` : '&#10003; Tutte chiamate'}</button>
           </div>
           <div class="ec-grid-wrap ec-grid-wrap--auto">
-            <table class="ec-grid ec-grid--pool">
-              <thead><tr><th>Pratica</th><th>Cognome</th><th>Nome</th><th>Tipologia</th><th>Istituto Finanziario</th><th>Stato Attuale</th><th>Operatore</th><th>Segnalata</th><th>Chiamato</th><th>Note chiamata</th></tr></thead>
+            <table class="ec-grid ec-grid--pool ec-calls-tbl" style="--tw:${totalW}px">
+              ${colgroup}${thead}
               <tbody>${list.map(({ w, stato }) => `
                 <tr data-pid="${esc(w.pratica_id)}" class="${w.called ? 'is-called' : ''}">
                   <td class="ec-col-id">${UI.praticaLink(w.pratica_id)}</td>
                   ${cell(w.cognome)}${cell(w.nome)}${cell(w.tipologia)}${cell(w.istituto_finanziario)}
                   <td>${UI.statoBadge(esc(stato))}</td>
-                  <td>${esc(colName(w.colleague_id) || userName(w.set_by)) || dash}</td>
-                  <td>${new Date(w.set_at).toLocaleDateString('it-IT')}</td>
-                  <td>${w.called ? `<span class="ec-called-badge">&#10003; Chiamato<small>${esc(callTime(w.called_at))}</small></span>` : dash}</td>
-                  <td class="ec-col-wrap" title="${esc(w.pool_note)}">${esc(w.pool_note || w.note) || dash}</td>
+                  <td title="${esc(by(w))}">${esc(by(w)) || dash}<small class="d-block text-muted">${esc(new Date(w.set_at).toLocaleDateString('it-IT'))}</small></td>
+                  <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
+                  <td class="ec-calls-called">${calledCell(w, '')}</td>
+                  <td class="ec-col-note">
+                    <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
+                      value="${esc(w.pool_note || '')}" placeholder="Note chiamata…" maxlength="1000" autocomplete="off"
+                      aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
+                  </td>
+                  <td>${outcomeCell(w, '')}</td>
                 </tr>`).join('')}
               </tbody>
             </table>
@@ -2862,7 +2890,7 @@
   window.App = window.AppRuntime = {
     getPractices: () => practices,
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
-    setCalled, setCallOutcome, setPoolNote, closePoolRow, openIntegra, refillPlan,
+    setCalled, callAgentAll, setCallOutcome, setPoolNote, closePoolRow, openIntegra, refillPlan,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, callToggle, callToggleAll, callClearSel, callBulkMove, planToggle, planToggleAll, planClearSel, planBulkMove, planBulkRemove, filterPool, showAllPool, poolSet, poolReset,
     sendChat, chatOpen, openNotification, callsFilter: callsFilterSet, checkIntToggle,
