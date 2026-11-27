@@ -33,7 +33,6 @@ const Admin = (() => {
     renderColleagues();
     renderPendingUsers();
     renderUsers();
-    await renderWorkingDays();
     renderVerifica();
     sallyRegLoad();
     watchLoad();
@@ -295,19 +294,6 @@ const Admin = (() => {
     } catch(e) {
       UI.toast('Errore: ' + e.message, 'danger');
     }
-  }
-
-  // ── WORKING DAYS ──────────────────────────── */
-  async function renderWorkingDays() {
-    const el = document.getElementById('admin-working-days');
-    if (el) el.value = _config.working_days ?? 1;
-  }
-
-  async function saveWorkingDays() {
-    const el = document.getElementById('admin-working-days');
-    const v = parseInt(el?.value) || 1;
-    await DB.setConfig('working_days', v);
-    UI.toast('Giorni lavorativi salvati', 'success');
   }
 
   // ── TABELLA VERIFICA DOCUMENTI (popup Modelli) ─────────── */
@@ -826,7 +812,7 @@ const Admin = (() => {
     openColleagueModal, saveColleague, deleteColleague,
     toggleModalTipologia, toggleModalFilterIncluded, cycleModalFilterMode,
     addModalExcludedAgent, removeModalExcludedAgent,
-    saveWorkingDays, renderWorkingDays, saveVerifica, resetVerifica,
+    saveVerifica, resetVerifica,
     addModalSally, removeModalSally, setModalSallyOnly,
     setUserRole, setUserColleague, setUserPassword, approveUser, rejectUser,
     impersonate: id => Auth.impersonate(id),
