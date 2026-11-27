@@ -896,3 +896,21 @@ html[data-bs-theme="dark"] .ec-grid tr.ec-sel td, html[data-bs-theme="dark"] .ec
 .ec-watch-agent { color: #d63939; font-weight: 700; background: rgba(214, 57, 57, .12); border-radius: 6px; padding: .05rem .4rem; white-space: nowrap; }
 .ec-watch-tag { display: inline-block; margin-left: .35rem; color: #d63939; font-weight: 700; font-size: .72rem; background: rgba(214, 57, 57, .12); border-radius: 999px; padding: .05rem .5rem; white-space: nowrap; }
 html[data-bs-theme="dark"] .ec-watch-agent, html[data-bs-theme="dark"] .ec-watch-tag { color: #ff8a8a; background: rgba(214, 57, 57, .22); }
+
+/* ── CHIAMATE: colonne fisse ─────────────────────────────────── */
+.ec-calls-card .card-header { display: flex; align-items: center; flex-wrap: wrap; gap: .25rem; }
+@media (min-width: 768px) { .ec-calls-tbl { table-layout: fixed; width: 100%; min-width: var(--tw); } }
+@media (max-width: 767.98px) { .ec-calls-tbl colgroup { display: none; } }
+.ec-calls-tbl th, .ec-calls-tbl td { vertical-align: middle; overflow: hidden; text-overflow: ellipsis; }
+.ec-calls-tbl td.ec-col-wrap, .ec-calls-tbl td.ec-calls-called { white-space: normal; }
+.ec-calls-tbl .ec-called-badge, .ec-calls-tbl .ec-call-btn { max-width: 100%; }
+.ec-calls-tbl .ec-called-badge { flex-direction: column; align-items: flex-start; gap: 0; border-radius: .6rem; white-space: normal; }
+.ec-calls-tbl .ec-called-badge small { display: block; }
+
+/* ── CHAT: un colore per ogni utente (tinta in --uh) ─────────── */
+.ec-uc-av { background: hsl(var(--uh) 70% 86%) !important; color: hsl(var(--uh) 62% 26%) !important; }
+.ec-uc-bubble { background: hsl(var(--uh) 80% 94%); border-left: 3px solid hsl(var(--uh) 62% 55%); }
+.ec-uc-name { color: hsl(var(--uh) 65% 34%); }
+html[data-bs-theme="dark"] .ec-uc-av { background: hsl(var(--uh) 45% 30%) !important; color: hsl(var(--uh) 80% 88%) !important; }
+html[data-bs-theme="dark"] .ec-uc-bubble { background: hsl(var(--uh) 32% 22%); border-left-color: hsl(var(--uh) 55% 55%); color: var(--ec-ink); }
+html[data-bs-theme="dark"] .ec-uc-name { color: hsl(var(--uh) 75% 74%); }
