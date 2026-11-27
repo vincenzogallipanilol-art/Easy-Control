@@ -369,6 +369,18 @@ const DB = (() => {
     if (error) throw error;
     return (data && data[0]) || null;
   }
+  // Stesso aggiornamento su piu' pratiche (es. segna chiamate tutte le pratiche di un agente); ritorna le righe aggiornate
+  async function updateWorkMany(praticaIds, patch) {
+    const out = [];
+    await inChunks(praticaIds, 200, 3, async part => {
+      const { data, error } = await db.from('practice_work')
+        .update({ ...patch, updated_at: new Date().toISOString() })
+        .in('pratica_id', part).select();
+      if (error) throw error;
+      out.push(...(data || []));
+    });
+    return out;
+  }
   // Trasferisce piu' pratiche (pool "Da chiamare") a un altro collega; ritorna le righe aggiornate
   async function moveWork(praticaIds, colleagueId) {
     const out = [];
@@ -462,7 +474,7 @@ const DB = (() => {
     getUsers, setUserRole, setUserColleague, approveUser, rejectUser, adminSetPassword,
     getAgentExclusions,
     getLastChecks, sallySync, getSallyChecked, addSallyChecked, deleteSallyChecked,
-    getOpenWork, setPracticeWork, updateWork, closeWork, getCheckStats, getCheckSeries, notifyMentions,
+    getOpenWork, setPracticeWork, updateWork, updateWorkMany, closeWork, getCheckStats, getCheckSeries, notifyMentions,
     isMissingSchema,
     getNotifications, markNotificationRead,
     getChatMessages, sendChatMessage, getChatReads, markChatRead,
