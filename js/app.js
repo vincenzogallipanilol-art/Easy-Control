@@ -2631,12 +2631,13 @@
   }
 
   const chatName = u => (u && (u.full_name || u.email)) || '—';
-  // Colore assegnato a ogni utente (stabile, tinte ben distanziate): avatar, nome e fumetto
-  function userHue(id) {
-    const ids = [...new Set([...users.map(u => u.id), session.user.id])].sort();
-    return Math.round((Math.max(0, ids.indexOf(id)) * 137.508 + 212) % 360);
+  // Colore di ogni utente = colore del collega collegato (configurazione admin); senza collega: grigio
+  function userColor(id) {
+    const u = users.find(x => x.id === id);
+    const c = u && u.colleague_id ? colleagues.find(x => x.id === u.colleague_id) : null;
+    return c ? UI.colleagueHex(c.color_idx || 0) : '#868e96';
   }
-  const ucStyle = id => `style="--uh:${userHue(id)}"`;
+  const ucStyle = id => `style="--uc:${userColor(id)}"`;
   function renderChat(opts = {}) {
     const el = $('chat-content');
     if (!el) return;
