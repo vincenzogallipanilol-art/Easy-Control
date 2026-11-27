@@ -217,9 +217,9 @@
   const manualAssignments = () => Object.values(assignments).filter(a => a.is_manual);
 
   // ── 3. Navigazione SPA ─────────────────────────────────────────────
-  const ELEVATED_TARGETS = ['pool', 'scheda'];
+  const ELEVATED_TARGETS = ['pool', 'scheda', 'checkint'];
   const ADMIN_TARGETS    = ['admin'];
-  const ALL_TARGETS      = [...ELEVATED_TARGETS, ...ADMIN_TARGETS, 'dashboard', 'mine', 'chat'];
+  const ALL_TARGETS      = [...ELEVATED_TARGETS, ...ADMIN_TARGETS, 'dashboard', 'mine', 'chat', 'chiamate'];
   function isTargetAllowed(target) {
     if (ADMIN_TARGETS.includes(target))    return isAdmin;
     if (ELEVATED_TARGETS.includes(target)) return canSeeAll;
@@ -277,6 +277,8 @@
     scheda:    'Piano di lavoro del collega',
     mine:      'Il tuo piano di lavoro di oggi',
     chat:      'Scrivi al team e tagga i colleghi',
+    chiamate:  'Tutte le pratiche da chiamare, per agente in ordine alfabetico',
+    checkint:  'Pratiche in richiesta integrazioni, per agente',
     admin:     'Utenti, colleghi e regole di distribuzione',
   };
   function isElevatedView() { return canSeeAll; }
@@ -295,6 +297,8 @@
     else if (target === 'pool') renderPool();
     else if (target === 'mine') renderMine();
     else if (target === 'scheda') renderScheda();
+    else if (target === 'chiamate') renderCalls();
+    else if (target === 'checkint') renderCheckInt();
   }
 
   // Ridisegna senza perdere il campo in cui l'utente sta scrivendo
@@ -322,6 +326,8 @@
     withFocus(() => {
       if (currentTarget === 'dashboard') renderDashboard();
       else if (currentTarget === 'pool') renderPool();
+      else if (currentTarget === 'chiamate') renderCalls();
+      else if (currentTarget === 'checkint') renderCheckInt();
       else if (currentTarget === 'mine') renderPlanExtras(myColleagueId);
       else if (currentTarget === 'scheda') { renderSchedaHead(); renderPlanExtras(schedaColleagueId); }
     });
@@ -2737,6 +2743,126 @@
     if (praticaId) revealPratica(praticaId);
   }
 
+  // ── Chiamate: tutte le pratiche "Da chiamare" (consultazione per tutti), per agente in ordine alfabetico ──
+  const callsFilter = { q: '', ag: '' };
+  const byIt = (a, b) => String(a).localeCompare(String(b), 'it');
+  const agentLabel = a => String(a || '').trim() || 'Senza agente';
+  function renderCalls() {
+    const el = $('chiamate-content');
+    if (!el) return;
+    if (!dataLoaded) { el.innerHTML = spinner; return; }
+    const all = Object.values(work).filter(w => workState(w.pratica_id).phase === 'call')
+      .map(w => { const p = practiceByPid[w.pratica_id] || {}; return { w, ag: agentLabel(w.agente_attuale || p.agente_attuale), stato: p.stato_attuale || '' }; });
+    const agents = [...new Set(all.map(r => r.ag))].sort(byIt);
+    const q = callsFilter.q.toLowerCase().trim();
+    const rows = all.filter(r => (!callsFilter.ag || r.ag === callsFilter.ag) &&
+      (!q || [r.w.pratica_id, r.w.cognome, r.w.nome, r.ag, r.w.tipologia].join(' ').toLowerCase().includes(q)));
+    const groups = new Map();
+    for (const r of rows) { if (!groups.has(r.ag)) groups.set(r.ag, []); groups.get(r.ag).push(r); }
+    const cards = [...groups.keys()].sort(byIt).map(ag => {
+      const list = groups.get(ag).sort((a, b) => byIt(a.w.cognome || '', b.w.cognome || '') || byIt(a.w.nome || '', b.w.nome || ''));
+      const wa = watchFor(ag === 'Senza agente' ? '' : ag);
+      return `
+        <div class="card mb-3 ec-calls-card">
+          <div class="card-header">
+            <h3 class="card-title">${wa ? `<span class="ec-watch-agent" title="${esc(watchTip(wa))}">&#9888; ${esc(ag)}</span>` : esc(ag)} — ${fmt(list.length)}</h3>
+          </div>
+          <div class="ec-grid-wrap ec-grid-wrap--auto">
+            <table class="ec-grid ec-grid--pool">
+              <thead><tr><th>Pratica</th><th>Cognome</th><th>Nome</th><th>Tipologia</th><th>Istituto Finanziario</th><th>Stato Attuale</th><th>Operatore</th><th>Segnalata</th><th>Chiamato</th><th>Note chiamata</th></tr></thead>
+              <tbody>${list.map(({ w, stato }) => `
+                <tr data-pid="${esc(w.pratica_id)}" class="${w.called ? 'is-called' : ''}">
+                  <td class="ec-col-id">${UI.praticaLink(w.pratica_id)}</td>
+                  ${cell(w.cognome)}${cell(w.nome)}${cell(w.tipologia)}${cell(w.istituto_finanziario)}
+                  <td>${UI.statoBadge(esc(stato))}</td>
+                  <td>${esc(colName(w.colleague_id) || userName(w.set_by)) || dash}</td>
+                  <td>${new Date(w.set_at).toLocaleDateString('it-IT')}</td>
+                  <td>${w.called ? `<span class="ec-called-badge">&#10003; Chiamato<small>${esc(callTime(w.called_at))}</small></span>` : dash}</td>
+                  <td class="ec-col-wrap" title="${esc(w.pool_note)}">${esc(w.pool_note || w.note) || dash}</td>
+                </tr>`).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>`;
+    }).join('');
+    el.innerHTML = `
+      <div class="d-flex flex-wrap align-items-end gap-3 mb-3 ec-pool-filters">
+        <input type="search" class="form-control form-control-sm" data-fkey="calls-search" placeholder="Cerca pratica, nome, agente…"
+          value="${esc(callsFilter.q)}" oninput="App.callsFilter('q', this.value)" aria-label="Cerca nelle chiamate"/>
+        <label>Agente
+          <select class="form-select form-select-sm" data-fkey="calls-ag" onchange="App.callsFilter('ag', this.value)" aria-label="Agente">
+            <option value="">Tutti</option>
+            ${agents.map(a => `<option value="${esc(a)}" ${a === callsFilter.ag ? 'selected' : ''}>${esc(a)}</option>`).join('')}
+          </select>
+        </label>
+        <small class="text-muted ms-auto">${fmt(rows.length)} pratiche · ${fmt(groups.size)} agenti</small>
+      </div>
+      ${cards || UI.emptyState(svg('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>', 40), all.length ? 'Nessuna pratica corrisponde ai filtri' : 'Nessuna pratica da chiamare')}`;
+  }
+  const callsRenderSoon = debounce(() => withFocus(renderCalls), 180);
+  function callsFilterSet(field, value) { callsFilter[field] = value || ''; if (field === 'q') callsRenderSoon(); else withFocus(renderCalls); }
+
+  // ── Check Integrazioni: pratiche in "Richiesta Integrazioni Originali" / "Richiesta integrazioni KIT Affida-6-l", per agente ──
+  const INTEG_KINDS = [
+    { key: 'orig', label: 'Richiesta Integrazioni Originali', test: n => n.includes('richiesta integrazion') && n.includes('original') },
+    { key: 'kit',  label: 'Richiesta integrazioni KIT Affida-6-l', test: n => n.includes('richiesta integrazion') && n.includes('kit') },
+  ];
+  const checkOpen = new Set();
+  function checkIntData() {
+    const by = new Map();
+    for (const p of practices) {
+      const n = norm(p.stato_attuale).replace(/\s+/g, ' ');
+      const k = INTEG_KINDS.find(x => x.test(n));
+      if (!k) continue;
+      const ag = agentLabel(p.agente_attuale);
+      if (!by.has(ag)) by.set(ag, { ag, orig: [], kit: [] });
+      by.get(ag)[k.key].push(p);
+    }
+    return [...by.values()].sort((a, b) => (b.orig.length + b.kit.length) - (a.orig.length + a.kit.length) || byIt(a.ag, b.ag));
+  }
+  function renderCheckInt() {
+    const el = $('checkint-content');
+    if (!el) return;
+    if (!dataLoaded) { el.innerHTML = spinner; return; }
+    if (!activeReport) { el.innerHTML = UI.emptyState(svg('<circle cx="12" cy="12" r="10"/>', 40), 'Nessun report attivo'); return; }
+    const data = checkIntData();
+    const nO = data.reduce((s, r) => s + r.orig.length, 0), nK = data.reduce((s, r) => s + r.kit.length, 0);
+    const detail = r => [...r.orig.map(p => [p, 'O']), ...r.kit.map(p => [p, 'K'])]
+      .sort((a, b) => byIt(a[0].cognome || '', b[0].cognome || '') || byIt(a[0].nome || '', b[0].nome || ''))
+      .map(([p, t]) => `<span class="d-inline-block me-3 mb-1 small"><span class="badge ${t === 'O' ? 'bg-orange-lt' : 'bg-purple-lt'} me-1" title="${esc(INTEG_KINDS[t === 'O' ? 0 : 1].label)}">${t === 'O' ? 'Originali' : 'KIT'}</span>${UI.praticaLink(p.pratica_id || '')} ${esc(p.cognome || '')} ${esc(p.nome || '')}</span>`).join('');
+    el.innerHTML = `
+      <div class="ec-kpis mb-3">
+        ${UI.kpiTile('Totale in integrazione', fmt(nO + nK), iconFlag(), 'orange')}
+        ${UI.kpiTile(INTEG_KINDS[0].label, fmt(nO), iconDoc(), 'blue')}
+        ${UI.kpiTile(INTEG_KINDS[1].label, fmt(nK), iconDoc(), 'purple')}
+        ${UI.kpiTile('Agenti coinvolti', fmt(data.length), iconPool(), 'teal')}
+      </div>
+      <div class="card">
+        <div class="table-responsive">
+          <table class="table table-sm table-vcenter card-table ec-nostack">
+            <thead><tr><th>Agente</th><th class="text-end" title="${esc(INTEG_KINDS[0].label)}">Originali</th><th class="text-end" title="${esc(INTEG_KINDS[1].label)}">KIT</th><th class="text-end">Totale</th></tr></thead>
+            <tbody>
+              ${data.map(r => {
+                const open = checkOpen.has(r.ag);
+                return `
+                <tr class="${open ? 'table-active' : ''}" style="cursor:pointer" data-agent="${esc(r.ag)}" onclick="App.checkIntToggle(this)" title="Mostra le pratiche">
+                  <td><strong>${esc(r.ag)}</strong></td>
+                  <td class="text-end">${fmt(r.orig.length)}</td><td class="text-end">${fmt(r.kit.length)}</td>
+                  <td class="text-end"><strong>${fmt(r.orig.length + r.kit.length)}</strong></td>
+                </tr>${open ? `<tr><td colspan="4" style="background:rgba(0,0,0,.03)">${detail(r)}</td></tr>` : ''}`;
+              }).join('') || '<tr><td colspan="4" class="text-center text-muted py-4">Nessuna pratica in richiesta integrazioni</td></tr>'}
+            </tbody>
+            ${data.length ? `<tfoot><tr><th>Totale</th><th class="text-end">${fmt(nO)}</th><th class="text-end">${fmt(nK)}</th><th class="text-end">${fmt(nO + nK)}</th></tr></tfoot>` : ''}
+          </table>
+        </div>
+      </div>`;
+  }
+  function checkIntToggle(tr) {
+    const ag = tr.dataset.agent;
+    if (checkOpen.has(ag)) checkOpen.delete(ag); else checkOpen.add(ag);
+    withFocus(renderCheckInt);
+  }
+
   // Funzioni richiamate dagli handler inline
   window.App = window.AppRuntime = {
     getPractices: () => practices,
@@ -2744,7 +2870,7 @@
     setCalled, setCallOutcome, setPoolNote, closePoolRow, openIntegra, refillPlan,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, callToggle, callToggleAll, callClearSel, callBulkMove, planToggle, planToggleAll, planClearSel, planBulkMove, planBulkRemove, filterPool, showAllPool, poolSet, poolReset,
-    sendChat, chatOpen, openNotification,
+    sendChat, chatOpen, openNotification, callsFilter: callsFilterSet, checkIntToggle,
     impersonate: id => Auth.impersonate(id),
   };
 
