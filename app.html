@@ -19,9 +19,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com"/>
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;500;600;700&display=swap"/>
-  <link rel="stylesheet" href="css/app.css?v=1.38.1"/>
-  <link rel="stylesheet" href="css/mobile.css?v=1.38.1"/>
-  <script src="js/theme.js?v=1.38.1"></script>
+  <link rel="stylesheet" href="css/app.css?v=1.39.0"/>
+  <link rel="stylesheet" href="css/mobile.css?v=1.39.0"/>
+  <script src="js/theme.js?v=1.39.0"></script>
 </head>
 <body class="antialiased">
 
@@ -80,6 +80,26 @@
                 <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
               </span>
               <span class="nav-link-title ec-sidebar-label">Pool</span>
+            </a>
+          </li>
+
+          <!-- Chiamate -->
+          <li class="nav-item">
+            <a class="nav-link" href="#" data-nav="chiamate" title="Chiamate: tutte le pratiche da chiamare, per agente">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9c0-1 .9-2 2.2-2.4C8 5.8 16 5.8 18.8 6.6 20.1 7 21 8 21 9v1a1 1 0 0 1-1 1h-3l-.6-1.8a1 1 0 0 0-.9-.7H8.5a1 1 0 0 0-.9.7L7 11H4a1 1 0 0 1-1-1z"/><path d="M7 11l-1.5 4"/><path d="M17 11l1.5 4"/><rect x="4" y="15" width="16" height="5" rx="1.5"/><circle cx="12" cy="17.5" r="1"/></svg>
+              </span>
+              <span class="nav-link-title ec-sidebar-label">Chiamate</span>
+            </a>
+          </li>
+
+          <!-- Check Integrazioni -->
+          <li class="nav-item" data-elevated-only>
+            <a class="nav-link" href="#" data-nav="checkint" title="Check Integrazioni: pratiche in richiesta integrazioni per agente">
+              <span class="nav-link-icon d-md-none d-lg-inline-block">
+                <svg xmlns="http://www.w3.org/2000/svg" width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+              </span>
+              <span class="nav-link-title ec-sidebar-label">Check Integrazioni</span>
             </a>
           </li>
 
@@ -234,6 +254,16 @@
         <!-- Scheda collega: il suo piano di lavoro a pagina intera (Admin + Top) -->
         <div data-section="scheda" data-elevated-only style="display:none">
           <div id="scheda-content"></div>
+        </div>
+
+        <!-- Chiamate (tutti) -->
+        <div data-section="chiamate" style="display:none">
+          <div id="chiamate-content"></div>
+        </div>
+
+        <!-- Check Integrazioni (Admin + Top) -->
+        <div data-section="checkint" data-elevated-only style="display:none">
+          <div id="checkint-content"></div>
         </div>
 
         <!-- Piano di lavoro personale -->
@@ -537,23 +567,23 @@
 <!-- ── SCRIPTS ──────────────────────────────────── -->
 <script src="https://cdn.jsdelivr.net/npm/@tabler/core@1.0.0/dist/js/tabler.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="js/config.js?v=1.38.1"></script>
-<script src="js/supabase-client.js?v=1.38.1"></script>
-<script src="js/auth.js?v=1.38.1"></script>
-<script src="js/cache.js?v=1.38.1"></script>
-<script src="js/db.js?v=1.38.1"></script>
-<script src="js/engine.js?v=1.38.1"></script>
-<script src="js/realtime.js?v=1.38.1"></script>
-<script src="js/colfilter.js?v=1.38.1"></script>
-<script src="js/version.js?v=1.38.1"></script>
-<script src="js/changelog.js?v=1.38.1"></script>
-<script src="js/updates.js?v=1.38.1"></script>
-<script src="js/focus.js?v=1.38.1"></script>
-<script src="js/ui.js?v=1.38.1"></script>
-<script src="js/modelli.js?v=1.38.1"></script>
-<script src="js/admin.js?v=1.38.1"></script>
-<script src="js/app.js?v=1.38.1"></script>
-<script src="js/mobile.js?v=1.38.1"></script>
+<script src="js/config.js?v=1.39.0"></script>
+<script src="js/supabase-client.js?v=1.39.0"></script>
+<script src="js/auth.js?v=1.39.0"></script>
+<script src="js/cache.js?v=1.39.0"></script>
+<script src="js/db.js?v=1.39.0"></script>
+<script src="js/engine.js?v=1.39.0"></script>
+<script src="js/realtime.js?v=1.39.0"></script>
+<script src="js/colfilter.js?v=1.39.0"></script>
+<script src="js/version.js?v=1.39.0"></script>
+<script src="js/changelog.js?v=1.39.0"></script>
+<script src="js/updates.js?v=1.39.0"></script>
+<script src="js/focus.js?v=1.39.0"></script>
+<script src="js/ui.js?v=1.39.0"></script>
+<script src="js/modelli.js?v=1.39.0"></script>
+<script src="js/admin.js?v=1.39.0"></script>
+<script src="js/app.js?v=1.39.0"></script>
+<script src="js/mobile.js?v=1.39.0"></script>
 
 </body>
 </html>
