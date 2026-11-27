@@ -1643,11 +1643,11 @@
     const key = btn.dataset.chip || '';
     if (btn.dataset.pool) {
       // questi stati vivono nei pool: si apre il pool (o l'elenco "Da chiamare" sotto il piano)
-      if (canSeeAll) goPool(key);
-      else if (key === 'da_chiamare') {
-        const box = document.querySelector('[data-plan-call]');
-        if (box) box.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      if (key === 'da_chiamare') {
+        const box = document.querySelector(`[data-plan-call="${CSS.escape(card.dataset.plan)}"]`) || document.querySelector('[data-plan-call]');
+        if (box) { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); return; }
       }
+      if (canSeeAll) goPool(key);
       return;
     }
     const f = planFilter[card.dataset.plan] || (planFilter[card.dataset.plan] = { q: '', st: 'todo' });
@@ -2175,10 +2175,10 @@
     const PAGE = 200;
     const regular = rows.filter(r => !r.sally), sally = rows.filter(r => r.sally);
     const assignOptions = colleagues.filter(c => c.active).map(c => `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join('');
-    _poolIds = rows.map(r => r.p.id);
+    _poolGrp = { r: regular.map(r => r.p.id), s: sally.map(r => r.p.id) };
     const poolRow = (r, showAssign) => `
       <tr class="pool-row${poolSel.has(r.p.id) ? ' table-active' : ''}">
-        <td class="w-1"><input type="checkbox" class="form-check-input m-0 pool-chk" data-practice="${r.p.id}" ${poolSel.has(r.p.id) ? 'checked' : ''}
+        <td class="w-1"><input type="checkbox" class="form-check-input m-0 pool-chk" data-practice="${r.p.id}" data-grp="${showAssign ? 'r' : 's'}" ${poolSel.has(r.p.id) ? 'checked' : ''}
           onclick="App.poolToggle(this, event)" aria-label="Seleziona pratica ${esc(r.pid)}"/></td>
         <td class="font-monospace small">${UI.praticaLink(r.pid)}</td>
         <td>${esc(r.cognome)} ${esc(r.nome)}${showAssign ? watchTag(r.agente) : ''}</td>
@@ -2194,8 +2194,8 @@
           </select>
         </td>
       </tr>`;
-    const chkAll = `<th class="w-1"><input type="checkbox" class="form-check-input m-0" id="pool-chk-all" onclick="App.poolToggleAll(this)"
-      ${rows.length && rows.every(r => poolSel.has(r.p.id)) ? 'checked' : ''} aria-label="Seleziona tutte le pratiche filtrate"/></th>`;
+    const chkAll = (grp, list, label) => `<th class="w-1"><input type="checkbox" class="form-check-input m-0" id="pool-chk-all-${grp}" onclick="App.poolToggleAll(this, '${grp}')"
+      ${list.length && list.every(r => poolSel.has(r.p.id)) ? 'checked' : ''} aria-label="${label}"/></th>`;
     const bar = poolSel.size ? `
       <div class="card-body py-2 border-bottom d-flex flex-wrap align-items-center gap-2 ec-bulk-bar">
         <strong>${fmt(poolSel.size)} selezionate</strong>
@@ -2211,7 +2211,7 @@
       ${regular.length ? `
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr>${chkAll}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('controllata', 'Controllata')}<th>Assegna a</th></tr></thead>
+            <thead><tr>${chkAll('r', regular, 'Seleziona tutte le pratiche normali filtrate')}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('controllata', 'Controllata')}<th>Assegna a</th></tr></thead>
             <tbody>${shown(regular).map(r => poolRow(r, true)).join('')}</tbody>
           </table>
         </div>
@@ -2223,7 +2223,7 @@
         </div>
         <div class="table-responsive">
           <table class="table table-sm table-vcenter card-table">
-            <thead><tr>${regular.length ? '<th class="w-1"></th>' : chkAll}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('controllata', 'Controllata')}${pth('agente', 'Agente attuale')}<th>Assegna a</th></tr></thead>
+            <thead><tr>${chkAll('s', sally, 'Seleziona tutte le pratiche Sally filtrate')}${pth('pid', 'Pratica')}${pth('nominativo', 'Nominativo')}${pth('tipologia', 'Tipologia')}${pth('stato', 'Stato')}${pth('motivo', 'Motivo')}${pth('controllata', 'Controllata')}${pth('agente', 'Agente attuale')}<th>Assegna a</th></tr></thead>
             <tbody>${shown(sally).map(r => poolRow(r, false)).join('')}</tbody>
           </table>
         </div>
@@ -2284,18 +2284,19 @@
   function poolSet(field, value) { poolFilter[field] = value || ''; _poolShowAll = false; withFocus(renderPool); }
   function poolReset() { Object.assign(poolFilter, { q: '', st: '', tip: '', ag: '' }); ColFilter.clear('pool:'); _poolShowAll = false; renderPool(); }
 
-  let poolSel = new Set(), _poolIds = [], _poolLast = null;
+  let poolSel = new Set(), _poolGrp = { r: [], s: [] }, _poolLast = null;
   function poolToggle(el, ev) {
     const id = el.dataset.practice;
+    const ids = _poolGrp[el.dataset.grp] || [];
     if (ev && ev.shiftKey && _poolLast && _poolLast !== id) {
-      const a = _poolIds.indexOf(_poolLast), b = _poolIds.indexOf(id);
-      if (a > -1 && b > -1) for (const x of _poolIds.slice(Math.min(a, b), Math.max(a, b) + 1)) el.checked ? poolSel.add(x) : poolSel.delete(x);
+      const a = ids.indexOf(_poolLast), b = ids.indexOf(id);
+      if (a > -1 && b > -1) for (const x of ids.slice(Math.min(a, b), Math.max(a, b) + 1)) el.checked ? poolSel.add(x) : poolSel.delete(x);
     } else if (el.checked) poolSel.add(id); else poolSel.delete(id);
     _poolLast = id;
     withFocus(renderPool);
   }
-  function poolToggleAll(el) {
-    for (const id of _poolIds) el.checked ? poolSel.add(id) : poolSel.delete(id);
+  function poolToggleAll(el, grp) {
+    for (const id of (_poolGrp[grp] || [])) el.checked ? poolSel.add(id) : poolSel.delete(id);
     withFocus(renderPool);
   }
   function poolClearSel() { poolSel.clear(); _poolLast = null; renderPool(); }
