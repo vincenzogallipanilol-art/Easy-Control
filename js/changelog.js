@@ -1,5 +1,12 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.40.0', date: '2026-11-28', items: [
+    'Chiamate: colonne fisse (Pratica ID, Cognome, Nome, Tipologia, Istituto, Stato, Segnalata da, Note, Chiamato, Note chiamata, Esito). Tutti possono segnare "Chiamato" (si vede chi e quando), scrivere le note della chiamata e dare l\'esito Conforme / Richiesta integrazioni, che fa uscire la pratica dall\'elenco.',
+    'Chiamate: accanto al nome di ogni agente il pulsante "Segna chiamato tutte" segna come chiamate tutte le sue pratiche.',
+    'Chat: ogni utente ha il proprio colore (avatar, nome e fumetto) nel gruppo e nelle chat private.',
+    'Il vecchio pool "Da chiamare" è stato tolto: le pratiche sono nel menu Chiamate. Tolto anche il dato "Giorni lavorativi" dalla dashboard e dalla configurazione.',
+    'Serve la migration 20261128000000_calls_write_all.sql.',
+  ] },
   { v: '1.39.1', date: '2026-11-27', items: [
     'Pulizia del codice: rimosse funzioni non più usate (vecchia gestione agenti esclusi, notifiche e chat). Nessun cambiamento di comportamento.',
     'Dopo il salvataggio di un collega un avviso ricorda che filtri stato e tipologie si applicano ai piani già assegnati solo con Ricalcola.',
