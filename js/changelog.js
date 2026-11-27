@@ -1,5 +1,9 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.39.1', date: '2026-11-27', items: [
+    'Pulizia del codice: rimosse funzioni non più usate (vecchia gestione agenti esclusi, notifiche e chat). Nessun cambiamento di comportamento.',
+    'Dopo il salvataggio di un collega un avviso ricorda che filtri stato e tipologie si applicano ai piani già assegnati solo con Ricalcola.',
+  ] },
   { v: '1.39.0', date: '2026-11-27', items: [
     'Nuova voce di menu "Chiamate" (icona telefono) per tutti: tutte le pratiche in Da chiamare, raggruppate per agente in ordine alfabetico, con ricerca e filtro agente. Chi telefona a un agente può sollecitare anche le integrazioni verificate da altri. Serve la migration 20261127000000_calls_read_all.sql.',
     'Nuova voce di menu "Check Integrazioni" (Admin e Top): per ogni agente quante pratiche sono in Richiesta Integrazioni Originali e in Richiesta integrazioni KIT Affida-6-l; cliccando l\'agente si vedono le pratiche.',
