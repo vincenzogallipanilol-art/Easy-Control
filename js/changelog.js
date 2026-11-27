@@ -1,5 +1,9 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.38.1', date: '2026-11-27', items: [
+    'Dal piano di un utente, il tasto "Da chiamare" porta all\'elenco Da chiamare di quell\'utente invece che al pool generico.',
+    'Pool Da assegnare: gli agenti Sally hanno un selettore "seleziona tutte" separato da quello delle pratiche normali.',
+  ] },
   { v: '1.38.0', date: '2026-11-26', items: [
     'Easy Control si può installare come app: icona sulla schermata del telefono e apertura a tutto schermo (Android: menu del browser → Installa app; iPhone: Condividi → Aggiungi a Home).',
   ] },
