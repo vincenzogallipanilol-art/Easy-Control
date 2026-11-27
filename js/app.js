@@ -764,7 +764,6 @@
   const iconDoc   = () => svg('<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>');
   const iconCheck = () => svg('<polyline points="20 6 9 17 4 12"/>');
   const iconPool  = () => svg('<circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>');
-  const iconExcl  = () => svg('<circle cx="12" cy="12" r="10"/><line x1="4.93" y1="4.93" x2="19.07" y2="19.07"/>');
   const iconEye   = () => svg('<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>');
   const iconPhone = () => svg('<path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.8 19.8 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.12 4.18 2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.91.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z"/>');
   const iconFlag  = () => svg('<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>');
@@ -825,7 +824,7 @@
     } else {
       const { kpi } = runEngine(manualAssignments());
       const assignedCount = Object.keys(assignments).length;
-      const { regularPool, sallyPool } = poolSplit();
+      const { regularPool } = poolSplit();
       const checkedToday = stats.reduce((s, r) => s + Number(r.n_day || 0), 0);
 
       top = `
@@ -834,8 +833,6 @@
           ${UI.kpiTile('Assegnate',         fmt(assignedCount),      iconCheck(), 'green')}
           ${UI.kpiTile('In Pool',           fmt(regularPool.length), iconPool(),  'orange', '', "App.goPool('assign')")}
           ${UI.kpiTile('Controllate oggi',  fmt(checkedToday),       iconEye(),   'teal')}
-          ${kpi.sallyHooked ? UI.kpiTile('Agenti Sally (agganciati)', fmt(kpi.sallyHooked), iconExcl(), 'cyan') : ''}
-          ${sallyPool.length ? UI.kpiTile('Agenti Sally (pool)', fmt(sallyPool.length), iconExcl(), 'red', '', "App.goPool('assign')") : ''}
         </div>`;
     }
 
@@ -1219,6 +1216,21 @@
   const calledCell = (w, dis) => w.called
     ? `<button type="button" class="ec-called-badge" data-fkey="called:${esc(w.pratica_id)}" onclick="App.setCalled(this)" ${dis} title="Chiamata fatta${w.called_by ? ' da ' + esc(userName(w.called_by)) : ''}: clicca per annullare">&#10003; Chiamato<small>${esc((w.called_by ? userName(w.called_by) + ' · ' : '') + callTime(w.called_at))}</small></button>`
     : `<button type="button" class="ec-call-btn" data-fkey="called:${esc(w.pratica_id)}" onclick="App.setCalled(this)" ${dis} title="Segna che hai chiamato">Segna chiamato</button>`;
+  // Note della pratica "Da chiamare": un punto per riga; "[x] " all'inizio = punto fatto (si puo' smarcare il singolo punto)
+  const parsePoints = note => String(note || '').split(/\r?\n/).map(s => s.trim()).filter(Boolean)
+    .map(s => { const m = s.match(/^\[x\]\s*(.*)$/i); return m ? { done: true, text: m[1] } : { done: false, text: s }; });
+  const composePoints = pts => pts.map(p => (p.done ? '[x] ' : '') + p.text).join('\n');
+  const stampText = (at, by, since) => (at && Date.parse(at) >= (Date.parse(since) || 0) - 1000)
+    ? `modificata ${callTime(at)}${by ? ' · ' + userName(by) : ''}` : '';
+  const poolNoteStamp = w => (w.pool_note ? stampText(w.pool_note_at, w.pool_note_by, w.set_at) : '');
+  const callNoteCell = (w, dis) => {
+    const pts = parsePoints(w.note);
+    const st = stampText(w.note_edited_at, w.note_edited_by, w.set_at);
+    return `<div class="ec-pts">${pts.length ? pts.map((p, i) => `
+      <label class="ec-pt${p.done ? ' is-done' : ''}"><input type="checkbox" class="form-check-input" data-i="${i}" ${p.done ? 'checked' : ''} ${dis}
+        onchange="App.callPointToggle(this)" aria-label="Punto fatto"/><span>${esc(p.text)}</span></label>`).join('') : '<span class="text-muted">—</span>'}</div>
+      <div class="ec-pt-foot"><button type="button" class="btn btn-sm btn-link p-0" onclick="App.callNoteEdit(this)" ${dis}>&#9998; Modifica</button>${st ? `<small class="text-muted ms-2">${esc(st)}</small>` : ''}</div>`;
+  };
   const outcomeCell = (w, dis) => `
     <select class="form-select form-select-sm ec-outcome-select" data-fkey="out:${esc(w.pratica_id)}" aria-label="Esito pratica ${esc(w.pratica_id)}"
       onchange="App.setCallOutcome(this)" ${dis} title="Quando il cliente ha integrato: dai l'esito e la pratica esce dal pool">
@@ -1328,13 +1340,14 @@
                 <tr data-pid="${esc(w.pratica_id)}" class="${w.called ? 'is-called' : ''}${callSel.has(w.pratica_id) ? ' ec-sel' : ''}">
                   <td class="ec-col-id">${callChk(w.pratica_id)}${UI.praticaLink(w.pratica_id)}</td>
                   ${cell(w.cognome)}
-                  <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
+                  <td class="ec-col-wrap ec-calls-note">${callNoteCell(w, ro)}</td>
                   ${cell(w.tipologia)}${cell(w.istituto_finanziario)}${agentCell(w.agente_attuale)}
                   <td>${calledCell(w, ro)}</td>
                   <td class="ec-col-note">
                     <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
                       value="${esc(w.pool_note || '')}" placeholder="Esito della chiamata…" maxlength="1000" autocomplete="off"
                       aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()" ${ro}/>
+                    <small class="ec-note-stamp d-block text-muted">${esc(poolNoteStamp(w))}</small>
                   </td>
                   <td>${outcomeCell(w, ro)}</td>
                 </tr>`).join('')}
@@ -1827,8 +1840,40 @@
     const pid = input.closest('tr').dataset.pid;
     const note = input.value.trim();
     if (note === (work[pid]?.pool_note || '')) return;
-    await updatePoolRow(pid, { pool_note: note });
+    await updatePoolRow(pid, { pool_note: note, pool_note_at: new Date().toISOString(), pool_note_by: session.user.id });
+    const stamp = input.closest('td')?.querySelector('.ec-note-stamp');
+    if (stamp && work[pid]) stamp.textContent = poolNoteStamp(work[pid]);
   }
+  // Note della pratica da chiamare: smarca / ripristina il singolo punto, oppure modifica il testo (con data della modifica)
+  async function saveCallNote(pid, note) {
+    await updatePoolRow(pid, { note, note_edited_at: new Date().toISOString(), note_edited_by: session.user.id });
+    softRender();
+  }
+  function callPointToggle(chk) {
+    const pid = chk.closest('tr').dataset.pid;
+    const pts = parsePoints(work[pid]?.note);
+    const i = +chk.dataset.i;
+    if (!pts[i]) return;
+    pts[i].done = chk.checked;
+    saveCallNote(pid, composePoints(pts));
+  }
+  function callNoteEdit(btn) {
+    const td = btn.closest('td'), pid = btn.closest('tr').dataset.pid, w = work[pid];
+    if (!w) return;
+    td.innerHTML = `
+      <textarea class="form-control form-control-sm" rows="4" maxlength="1000" data-fkey="cnote:${esc(pid)}" aria-label="Note pratica">${esc(composePoints(parsePoints(w.note)))}</textarea>
+      <div class="mt-1"><button type="button" class="btn btn-sm btn-primary" onclick="App.callNoteSave(this)">Salva</button>
+        <button type="button" class="btn btn-sm ms-1" onclick="App.callNoteCancel()">Annulla</button></div>
+      <div class="text-muted small mt-1">Un punto per riga. <code>[x]</code> all'inizio = punto fatto.</div>`;
+    td.querySelector('textarea').focus();
+  }
+  function callNoteSave(btn) {
+    const td = btn.closest('td'), pid = btn.closest('tr').dataset.pid;
+    const note = composePoints(parsePoints(td.querySelector('textarea').value));
+    if (note === composePoints(parsePoints(work[pid]?.note))) { softRender(); return; }
+    saveCallNote(pid, note);
+  }
+  const callNoteCancel = () => softRender();
   async function closePoolRow(btn) {
     const pid = btn.closest('tr').dataset.pid;
     if (!UI.confirm(`Chiudere la pratica ${pid}? Verrà rimossa dal pool.`)) return;
@@ -1862,14 +1907,14 @@
         <div class="ec-log-body">
           <p class="mb-2"><strong>${esc(w.cognome)} ${esc(w.nome)}</strong> — inviata da <strong>${esc(from)}</strong>${plan && !from.toLowerCase().includes(plan.toLowerCase()) ? ` (piano di ${esc(plan)})` : ''} come ${UI.workBadge(w.status)}</p>
           ${w.note ? `<div class="ec-src-note mb-3" style="max-width:none;white-space:normal">Nota di invio: ${esc(w.note)}</div>` : ''}
-          <label class="form-label">Stato corretto</label>
+          <label class="form-label">Esito</label>
           <select class="form-select mb-3" id="integra-st">
             <option value="conforme">${esc(UI.WORK_STATUSES.conforme.label)}</option>
             <option value="integrazioni">${esc(UI.WORK_STATUSES.integrazioni.label)}</option>
           </select>
           <label class="form-label">Nota per ${esc(from)} <span class="text-muted" id="integra-req"></span></label>
           <textarea class="form-control" id="integra-note" rows="3" maxlength="700" placeholder="Esito / cosa è stato fatto…">${esc(w.pool_note || '')}</textarea>
-          <div class="text-muted small mt-2">La pratica esce dal pool e torna nel piano di lavoro di ${esc(plan || from)} con lo stato scelto; ${esc(from)} riceve una notifica.</div>
+          <div class="text-muted small mt-2">La pratica esce dal pool e torna nel piano di lavoro di ${esc(plan || from)} da controllare, con l'esito e la tua nota; ${esc(from)} riceve una notifica.</div>
         </div>
         <div class="ec-log-foot">
           <button type="button" class="btn me-2" data-close>Annulla</button>
@@ -1893,7 +1938,7 @@
     const st = $('integra-st').value, top = $('integra-note').value.trim(), def = UI.WORK_STATUSES[st];
     if (def.note && !top) { UI.toast(`La nota è obbligatoria per "${def.label}"`, 'warning'); $('integra-note').focus(); return; }
     const me = profile.full_name || profile.email, from = userName(w.set_by);
-    const note = `Gestita da ${me}${top ? ': ' + top : ''} (${(UI.WORK_STATUSES[w.status] || {}).label || w.status} di ${from}${w.note ? ': ' + w.note : ''})`.slice(0, 1000);
+    const note = `Gestita da ${me}: ${def.label}${top ? ' - ' + top : ''} (${(UI.WORK_STATUSES[w.status] || {}).label || w.status} di ${from}${w.note ? ': ' + w.note : ''})`.slice(0, 1000);
     const ok = $('integra-ok'); ok.disabled = true;
     try {
       const p = practiceByPid[pid];
@@ -1904,7 +1949,7 @@
         assignments[p.id] = { ...assignments[p.id], ...row };
       }
       const row = await DB.setPracticeWork({
-        praticaId: pid, status: st, note,
+        praticaId: pid, status: '', note,   // senza stato: torna nel piano come pratica da controllare
         reportId: (p && activeReport?.id) || w.report_id || null,
         colleagueId: w.colleague_id || null,
         practice: p || { cognome: w.cognome, nome: w.nome, tipologia: w.tipologia, istituto_finanziario: w.istituto_finanziario, agente_attuale: w.agente_attuale },
@@ -1918,7 +1963,7 @@
       }
       closeIntegra();
       softRender(); refreshStatsSoon();
-      UI.toast(`Pratica ${pid} integrata e rimandata a ${colName(w.colleague_id) || from} come "${def.label}"`, 'success');
+      UI.toast(`Pratica ${pid} rimandata a ${colName(w.colleague_id) || from}: torna nel piano da controllare (${def.label})`, 'success');
     } catch (e) {
       ok.disabled = false;
       UI.toast('Errore: ' + e.message, 'danger');
@@ -2794,12 +2839,13 @@
                   ${cell(w.cognome)}${cell(w.nome)}${cell(w.tipologia)}${cell(w.istituto_finanziario)}
                   <td>${UI.statoBadge(esc(stato))}</td>
                   <td title="${esc(by(w))}">${esc(by(w)) || dash}<small class="d-block text-muted">${esc(new Date(w.set_at).toLocaleDateString('it-IT'))}</small></td>
-                  <td class="ec-col-wrap" title="${esc(w.note)}">${esc(w.note) || dash}</td>
+                  <td class="ec-col-wrap ec-calls-note">${callNoteCell(w, '')}</td>
                   <td class="ec-calls-called">${calledCell(w, '')}</td>
                   <td class="ec-col-note">
                     <input type="text" class="form-control form-control-sm ec-note-input" data-fkey="pnote:${esc(w.pratica_id)}"
                       value="${esc(w.pool_note || '')}" placeholder="Note chiamata…" maxlength="1000" autocomplete="off"
                       aria-label="Note chiamata" onchange="App.setPoolNote(this)" onkeydown="if(event.key==='Enter')this.blur()"/>
+                    <small class="ec-note-stamp d-block text-muted">${esc(poolNoteStamp(w))}</small>
                   </td>
                   <td>${outcomeCell(w, '')}</td>
                 </tr>`).join('')}
@@ -2890,7 +2936,7 @@
   window.App = window.AppRuntime = {
     getPractices: () => practices,
     setStatus, saveNote, planSearch, planChip, planClearCols, openModelli, planMore, setSeriesDays, setSeriesMode,
-    setCalled, callAgentAll, setCallOutcome, setPoolNote, closePoolRow, openIntegra, refillPlan,
+    setCalled, callAgentAll, callPointToggle, callNoteEdit, callNoteSave, callNoteCancel, setCallOutcome, setPoolNote, closePoolRow, openIntegra, refillPlan,
     openScheda, backToDashboard, setPeriod, goPool, goMine,
     assignFromPool, poolToggle, poolToggleAll, poolClearSel, poolBulkAssign, moveFill, moveFromPlan, callToggle, callToggleAll, callClearSel, callBulkMove, planToggle, planToggleAll, planClearSel, planBulkMove, planBulkRemove, filterPool, showAllPool, poolSet, poolReset,
     sendChat, chatOpen, openNotification, callsFilter: callsFilterSet, checkIntToggle,
