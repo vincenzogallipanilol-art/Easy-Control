@@ -1,5 +1,8 @@
 // Registro delle novità mostrato dopo un aggiornamento. Aggiungere in cima una voce a ogni rilascio.
 const CHANGELOG = [
+  { v: '1.41.1', date: '2026-11-28', items: [
+    'Chat: il colore di ogni utente (avatar, nome e fumetto) è ora quello impostato nella configurazione del collega collegato.',
+  ] },
   { v: '1.41.0', date: '2026-11-28', items: [
     'Chiamate: le Note della pratica sono a punti (uno per riga) con una casella per ciascuno: chi ha fatto una singola integrazione spunta quel punto, che resta barrato. Con "Modifica" si può cambiare il testo; sotto compare la data (e chi) dell\'ultima modifica, anche per le Note chiamata.',
     'Pool Audit / xFlat / Help: quando un Top usa "Integra", la pratica torna nel piano di chi l\'aveva segnalata come pratica da controllare (con l\'esito e la nota del Top), non più con lo stato già applicato.',
